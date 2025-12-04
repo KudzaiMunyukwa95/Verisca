@@ -1,0 +1,36 @@
+# Core FastAPI
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+psycopg2-binary
+geoalchemy2
+alembic
+
+# Authentication & Security
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+
+# Validation
+pydantic
+pydantic-settings
+email-validator
+
+# Spatial libraries
+shapely
+
+# PDF Generation
+reportlab
+pillow
+
+# AWS S3
+boto3
+
+# Testing
+pytest
+pytest-cov
+pytest-asyncio
+httpx
