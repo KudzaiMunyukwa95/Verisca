@@ -73,7 +73,7 @@ def create_test_data():
             print("Admin user password reset to 'password123'.")
 
         print("\n---------------------------------------------------")
-        print("✅ Test Data Ready")
+        print("[SUCCESS] Test Data Ready")
         print("---------------------------------------------------")
         print(f"Tenant Code: {tenant.tenant_code}")
         print(f"Username:    admin")
@@ -81,7 +81,7 @@ def create_test_data():
         print("---------------------------------------------------")
 
     except Exception as e:
-        print(f"❌ Error creating test data: {e}")
+        print(f"[ERROR] Error creating test data: {e}")
     finally:
         db.close()
 
