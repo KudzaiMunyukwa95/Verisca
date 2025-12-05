@@ -7,13 +7,25 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.db.session import get_db
-from app.core.security import verify_password, create_access_token, decode_access_token
+from app.core.security import verify_password, create_access_token, decode_access_token, get_password_hash
 from app.schemas.auth import LoginRequest, LoginResponse, UserResponse, TenantResponse
 from app.models.tenant import User, Tenant
 
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
+
+
+# TEMPORARY: Hash generator endpoint for debugging
+@router.get("/generate-hash/{password}")
+async def generate_hash(password: str):
+    """Temporary endpoint to generate password hash. Remove in production."""
+    hashed = get_password_hash(password)
+    return {
+        "password": password,
+        "hash": hashed,
+        "sql": f"UPDATE users SET password_hash = '{hashed}' WHERE username = 'admin';"
+    }
 
 
 @router.post("/login", response_model=LoginResponse)
