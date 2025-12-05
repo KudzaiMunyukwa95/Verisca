@@ -104,8 +104,8 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     # Prepare response
     return LoginResponse(
         access_token=access_token,
-        user=UserResponse.from_orm(user),
-        tenant=TenantResponse.from_orm(tenant)
+        user=UserResponse.model_validate(user),
+        tenant=TenantResponse.model_validate(tenant)
     )
 
 
@@ -157,4 +157,4 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     Returns:
         UserResponse with current user details
     """
-    return UserResponse.from_orm(current_user)
+    return UserResponse.model_validate(current_user)
