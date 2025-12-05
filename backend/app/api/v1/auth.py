@@ -32,18 +32,23 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         HTTPException: If credentials are invalid
     """
     # Find tenant by code
+    print(f"[AUTH DEBUG] Looking for tenant with code: {login_data.tenant_code}")
     tenant = db.query(Tenant).filter(
         Tenant.tenant_code == login_data.tenant_code,
         Tenant.is_active == True
     ).first()
     
     if not tenant:
+        print(f"[AUTH DEBUG] Tenant not found: {login_data.tenant_code}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid tenant code",
         )
     
+    print(f"[AUTH DEBUG] Tenant found: {tenant.tenant_name} (ID: {tenant.id})")
+    
     # Find user by username and tenant
+    print(f"[AUTH DEBUG] Looking for user: {login_data.username} in tenant {tenant.id}")
     user = db.query(User).filter(
         User.username == login_data.username,
         User.tenant_id == tenant.id,
@@ -51,17 +56,25 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     ).first()
     
     if not user:
+        print(f"[AUTH DEBUG] User not found: {login_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
     
+    print(f"[AUTH DEBUG] User found: {user.email}")
+    print(f"[AUTH DEBUG] Verifying password...")
+    print(f"[AUTH DEBUG] Password hash from DB: {user.password_hash[:20]}...")
+    
     # Verify password
     if not verify_password(login_data.password, user.password_hash):
+        print(f"[AUTH DEBUG] Password verification FAILED")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
+    
+    print(f"[AUTH DEBUG] Password verification SUCCESS")
     
     # Update last login time
     user.last_login_at = datetime.utcnow()
