@@ -9,6 +9,8 @@ import uuid
 from app.db.base import Base
 
 
+from sqlalchemy.orm import relationship
+
 class Tenant(Base):
     """
     Tenant model representing insurance companies or assessor organizations.
@@ -34,6 +36,10 @@ class Tenant(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(UUID(as_uuid=True))
     updated_by = Column(UUID(as_uuid=True))
+    
+    # Relationships
+    farms = relationship("Farm", back_populates="tenant")
+    # claims = relationship("Claim", back_populates="tenant") # Add later
     
     __table_args__ = (
         Index('idx_tenants_active', 'is_active'),
