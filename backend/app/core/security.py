@@ -11,8 +11,13 @@ from fastapi import HTTPException, status
 from app.core.config import settings
 
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing context - with bcrypt padding fix
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__ident="2b",  # Force bcrypt 2b format
+    bcrypt__rounds=12     # Explicit rounds
+)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
