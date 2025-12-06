@@ -68,7 +68,7 @@ async def calculate_hail_damage(
     """
     Perform on-the-fly Hail Damage calculation (Exhibits 13, 14, 15).
     """
-    sample_dicts = [sample.dict(exclude_unset=True) for sample in request.samples]
+    sample_dicts = [sample.model_dump(exclude_unset=True) for sample in request.samples]
     
     try:
         result = await CalculationService.calculate_hail_damage(
@@ -90,7 +90,7 @@ async def calculate_weight_method(
     """
     Perform on-the-fly Weight Method Appraisal (Exhibit 17 + Quality).
     """
-    sample_dicts = [sample.dict(exclude_unset=True) for sample in request.samples]
+    sample_dicts = [sample.model_dump(exclude_unset=True) for sample in request.samples]
     
     try:
         result = await CalculationService.calculate_weight_method(
