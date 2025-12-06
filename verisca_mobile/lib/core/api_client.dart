@@ -9,7 +9,8 @@ class ApiClient {
   // CHANGE THIS TO YOUR LOCAL IP IF RUNNING ON EMULATOR via Network
   // For Windows/Simulator on same machine: http://127.0.0.1:8000
   // For Android Emulator to Localhost: http://10.0.2.2:8000
-  static const String baseUrl = 'http://localhost:8000';
+  // RENDER PRODUCTION URL:
+  static const String baseUrl = 'https://verisca.onrender.com';
 
   factory ApiClient() {
     return _instance;

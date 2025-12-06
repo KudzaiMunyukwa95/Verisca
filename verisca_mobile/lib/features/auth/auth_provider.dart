@@ -27,7 +27,7 @@ class AuthProvider extends ChangeNotifier {
       // Let's try FormData first as that's standard for /token endpoints in FastAPI.
       
       final response = await dio.post(
-        '/api/v1/auth/token',
+        '/api/v1/auth/login',
         data: FormData.fromMap({
           'username': username,
           'password': password,
