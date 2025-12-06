@@ -170,7 +170,8 @@ async def add_sample(
     """Record a sample point"""
     # Verify session access via claim -> tenant
     session = db.execute(
-        select(AssessmentSession).join(Claim)
+        select(AssessmentSession)
+        .join(Claim, AssessmentSession.claim_id == Claim.id)
         .where(
             AssessmentSession.id == session_id,
             Claim.tenant_id == current_user.tenant_id
