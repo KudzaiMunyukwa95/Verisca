@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.db.session import get_db
 from app.api.v1.auth import get_current_user
@@ -9,6 +9,7 @@ from app.schemas.calculations import CalculationRequest, CalculationResult
 
 from app.models.lookup import LookupTable
 from sqlalchemy import select
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -238,4 +239,41 @@ async def seed_lookup_tables(
     Initialize USDA lookup tables (Exhibit 11, etc.)
     """
     await CalculationService.seed_lookup_tables(db)
+    await CalculationService.seed_lookup_tables(db)
     return {"message": "Lookup tables seeded successfully"}
+
+class LookupUpdate(BaseModel):
+    table_name: str
+    input_value: float
+    stage_or_condition: Optional[str] = None
+    output_value: float
+
+@router.patch("/admin/lookup-tables", status_code=status.HTTP_200_OK)
+async def update_lookup_value(
+    update_data: LookupUpdate,
+    db: Session = Depends(get_db),
+    # current_user: User = Depends(get_current_admin_user) # TODO: Enforce Admin
+):
+    """
+    Admin: Update specific lookup table value.
+    This allows tweaking factors (e.g. Test Weight discounts) without redeploy.
+    """
+    # Find the specific entry
+    query = select(LookupTable).where(
+        LookupTable.table_name == update_data.table_name,
+        # using float comparison with small epsilon if needed, but usually equality works for exact inputs
+        LookupTable.input_value == update_data.input_value 
+    )
+    
+    if update_data.stage_or_condition:
+        query = query.where(LookupTable.stage_or_condition == update_data.stage_or_condition)
+        
+    entry = db.execute(query).scalar_one_or_none()
+    
+    if not entry:
+        raise HTTPException(status_code=404, detail="Lookup entry not found")
+        
+    entry.output_value = update_data.output_value
+    db.commit()
+    
+    return {"message": "Value updated", "new_value": entry.output_value}

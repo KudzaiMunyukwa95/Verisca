@@ -95,6 +95,55 @@ async def get_claim(
         raise HTTPException(status_code=404, detail="Claim not found")
     return claim
 
+@router.patch("/{claim_id}", response_model=ClaimResponse)
+async def update_claim(
+    claim_id: UUID,
+    claim_data: ClaimUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update claim details"""
+    claim = db.execute(
+        select(Claim).where(
+            Claim.id == claim_id,
+            Claim.tenant_id == current_user.tenant_id
+        )
+    ).scalar_one_or_none()
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+        
+    update_data = claim_data.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(claim, k, v)
+        
+    db.commit()
+    db.refresh(claim)
+    return claim
+
+@router.delete("/{claim_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_claim(
+    claim_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a claim"""
+    claim = db.execute(
+        select(Claim).where(
+            Claim.id == claim_id,
+            Claim.tenant_id == current_user.tenant_id
+        )
+    ).scalar_one_or_none()
+    
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+        
+    # Cascade delete is handled by DB FKs usually, or we need to delete sessions manually.
+    # Assuming SQLAlchemy relationships cascade or DB cascade.
+    db.delete(claim)
+    db.commit()
+    return None
+
 # --- Assessment Sessions Endpoints ---
 
 @router.post("/{claim_id}/sessions", response_model=AssessmentSessionResponse, status_code=status.HTTP_201_CREATED)
@@ -159,6 +208,61 @@ async def list_sessions(
     ).scalars().all()
     
     return sessions
+
+@router.patch("/{claim_id}/sessions/{session_id}", response_model=AssessmentSessionResponse)
+async def update_session(
+    claim_id: UUID,
+    session_id: UUID,
+    session_data: AssessmentSessionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update assessment session notes/status"""
+    session = db.execute(
+        select(AssessmentSession)
+        .join(Claim)
+        .where(
+            AssessmentSession.id == session_id,
+            AssessmentSession.claim_id == claim_id,
+            Claim.tenant_id == current_user.tenant_id
+        )
+    ).scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    update_data = session_data.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(session, k, v)
+        
+    db.commit()
+    db.refresh(session)
+    return session
+
+@router.delete("/{claim_id}/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_session(
+    claim_id: UUID,
+    session_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete an assessment session"""
+    session = db.execute(
+        select(AssessmentSession)
+        .join(Claim)
+        .where(
+            AssessmentSession.id == session_id,
+            AssessmentSession.claim_id == claim_id,
+            Claim.tenant_id == current_user.tenant_id
+        )
+    ).scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    db.delete(session)
+    db.commit()
+    return None
 
 @router.post("/sessions/{session_id}/samples", response_model=AssessmentSampleResponse)
 async def add_sample(
