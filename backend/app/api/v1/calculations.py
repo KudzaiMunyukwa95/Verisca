@@ -81,8 +81,6 @@ async def calculate_hail_damage(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/weight-method", response_model=CalculationResult)
 async def calculate_weight_method(
