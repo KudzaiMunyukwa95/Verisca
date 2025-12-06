@@ -27,6 +27,8 @@ app.add_middleware(
 )
 
 # Mount Static Files (for uploads)
+import os
+os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
 # Include routers
