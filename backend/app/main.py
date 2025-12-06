@@ -5,7 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api.v1 import auth, users, farms
+from fastapi.staticfiles import StaticFiles
+from app.api.v1 import auth, users, farms, claims, calculations, evidence, sync
 
 # Create FastAPI application
 app = FastAPI(
@@ -25,10 +26,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount Static Files (for uploads)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
+
 # Include routers
 app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["authentication"])
 app.include_router(users.router, prefix=f"{settings.API_V1_PREFIX}/users", tags=["users"])
 app.include_router(farms.router, prefix=f"{settings.API_V1_PREFIX}/farms", tags=["farms"])
+app.include_router(claims.router, prefix=f"{settings.API_V1_PREFIX}/claims", tags=["claims"])
+app.include_router(calculations.router, prefix=f"{settings.API_V1_PREFIX}/calculations", tags=["calculations"])
+app.include_router(evidence.router, prefix=f"{settings.API_V1_PREFIX}/evidence", tags=["evidence"])
+app.include_router(sync.router, prefix=f"{settings.API_V1_PREFIX}/sync", tags=["sync"])
 
 
 @app.get("/")
