@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
+import 'features/dashboard/dashboard_provider.dart';
+import 'features/dashboard/dashboard_screen.dart';
 
 void main() {
   runApp(const VeriscaApp());
@@ -15,6 +17,7 @@ class VeriscaApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthStatus()),
+        ChangeNotifierProvider(create: (_) => DashboardProvider()),
       ],
       child: MaterialApp(
         title: 'Verisca Mobile',
@@ -41,22 +44,7 @@ class AuthWrapper extends StatelessWidget {
     final auth = Provider.of<AuthProvider>(context);
     
     if (auth.isAuthenticated) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Dashboard")),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text("Welcome Assessor!"),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => auth.logout(), 
-                child: const Text("Logout")
-              )
-            ],
-          ),
-        ),
-      );
+      return const DashboardScreen();
     }
     return const LoginScreen();
   }
