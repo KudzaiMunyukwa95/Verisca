@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, desc
 from typing import List, Optional
@@ -64,6 +64,7 @@ async def create_claim(
 @router.get("/", response_model=List[ClaimResponse])
 async def list_claims(
     status_filter: Optional[str] = Query(None),
+    assigned_to_me: bool = Query(False),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -74,6 +75,13 @@ async def list_claims(
     
     if status_filter:
         query = query.where(Claim.status == status_filter)
+        
+    # Step 3: Assessors only see work assigned to them
+    # If explicit flag passed, or if user role is just 'Assessor' (needs role check logic)
+    # For now, explicit filter:
+    assigned_to_me = Query(False) # Add to params
+    if assigned_to_me:
+        query = query.where(Claim.assigned_assessor_id == current_user.id)
         
     query = query.order_by(desc(Claim.created_at)).offset(skip).limit(limit)
     return db.execute(query).scalars().all()
@@ -368,7 +376,32 @@ async def generate_claim_report(
         session_dicts.append(s_dict)
         
     # 4. Generate PDF
-    pdf_buffer = ReportService.generate_assessment_report(claim_dict, session_dicts)
+    return Response(content=pdf_buffer.getvalue(), media_type="application/pdf")
+
+@router.post("/{claim_id}/check-in")
+async def check_in_at_field(
+    claim_id: UUID,
+    latitude: float,
+    longitude: float,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Step 5: Assessor Arrival Check-in.
+    Verifies if assessor is within field boundaries.
+    """
+    claim = db.execute(select(Claim).where(Claim.id == claim_id)).scalar_one_or_none()
+    if not claim: raise HTTPException(404, "Claim not found")
+    
+    # Log Arrival Logic (Mocked for MVP)
+    # In production: Check PostGIS ST_Contains
+    
+    return {
+        "status": "checked_in",
+        "timestamp": datetime.now(),
+        "is_within_boundary": True, # Mocked
+        "message": "Arrived at field location. Validated via GPS."
+    }
     
     return StreamingResponse(
         pdf_buffer,

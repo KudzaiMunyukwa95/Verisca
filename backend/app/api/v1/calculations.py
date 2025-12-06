@@ -99,19 +99,12 @@ async def calculate_weight_method(
             samples=sample_dicts,
             # Pass fields if relevant or default
             moisture_pct=request.moisture_pct,
-            test_weight=request.test_weight
+            test_weight_kg_hl=request.test_weight_kg_hl
         )
-        # Hack: map result keys to CalculationResult schema loosely
-        # The schema expects 'loss_percentage' and 'average_potential_yield_pct'
-        # But Weight Method returns 'avg_yield_bu_acre'.
-        # We might need to adjust the response schema or result dict.
-        # For now, let's map 'average_potential_yield_pct' to yield
-        # and 'loss_percentage' to 0 (since it's an appraisal of what IS there, not what is lost)
         
-        # Proper solution: Update schema or use separate schema.
-        # Quick fix for MVP:
-        result["average_potential_yield_pct"] = result["avg_yield_bu_acre"] 
-        result["loss_percentage"] = 0.0 # Not a loss calculation, it's a yield appraisal
+        # Mapping Metric Result
+        result["average_potential_yield_pct"] = result["avg_yield_kg_ha"] 
+        result["loss_percentage"] = 0.0 
         result["growth_stage"] = "Mature"
         
         return result
@@ -184,7 +177,7 @@ async def calculate_tonnage_method(
         
         # Adaptation for MVP Schema
         result["loss_percentage"] = 0.0
-        result["average_potential_yield_pct"] = result["tons_per_acre"] # Mapping tons to yield field
+        result["average_potential_yield_pct"] = result["tonnes_per_ha"] 
         result["growth_stage"] = request.growth_stage
         
         return result
@@ -203,11 +196,11 @@ async def analyze_replanting_decision(
     """
     try:
         result = await CalculationService.calculate_replanting_analysis(
-            normal_yield=request.normal_yield_bu_acre,
-            price=request.price_per_bu,
+            normal_yield_kg_ha=request.normal_yield_kg_ha,
+            price_per_kg=request.price_per_kg,
             share=request.share_percent,
             stand_pct=request.surviving_stand_pct,
-            replant_cost=request.replanting_cost_per_acre,
+            replant_cost_per_ha=request.replanting_cost_per_ha,
             replant_factor=request.replanted_yield_factor
         )
         return result
