@@ -10,6 +10,8 @@ from app.schemas.calculations import CalculationRequest, CalculationResult
 from app.models.lookup import LookupTable
 from sqlalchemy import select
 
+router = APIRouter()
+
 # ... import existing ...
 
 @router.get("/lookup-tables", response_model=List[dict])

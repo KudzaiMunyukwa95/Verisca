@@ -201,3 +201,69 @@ async def add_sample(
     # Handle WKT response if needed
     # For now relying on Pydantic or basic serialization
     return sample
+
+# --- Reporting ---
+from fastapi.responses import StreamingResponse
+from app.services.reporting import ReportService
+
+@router.get("/{claim_id}/report")
+async def generate_claim_report(
+    claim_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate PDF Assessment Report.
+    """
+    # 1. Fetch Claim
+    claim = db.execute(
+        select(Claim).where(Claim.id == claim_id, Claim.tenant_id == current_user.tenant_id)
+    ).scalar_one_or_none()
+    
+    if not claim:
+         raise HTTPException(status_code=404, detail="Claim not found")
+         
+    # 2. Fetch Sessions & Samples
+    sessions = db.execute(
+        select(AssessmentSession)
+        .where(AssessmentSession.claim_id == claim_id)
+        .options(selectinload(AssessmentSession.samples))
+        .order_by(desc(AssessmentSession.created_at))
+    ).scalars().all()
+    
+    # 3. Prepare Data
+    claim_dict = {
+        "claim_number": claim.claim_number,
+        "status": claim.status,
+        "date_of_loss": claim.date_of_loss,
+        "peril_type": claim.peril_type,
+        "farm_id": str(claim.farm_id),
+        "field_id": str(claim.field_id)
+    }
+    
+    session_dicts = []
+    for sess in sessions:
+        s_dict = {
+            "date_started": str(sess.date_started),
+            "assessment_method": sess.assessment_method,
+            "calculated_result": sess.calculated_result,
+            "samples": []
+        }
+        for samp in sess.samples:
+            s_dict["samples"].append({
+                "sample_number": samp.sample_number,
+                "sample_location": samp.sample_location, # WKT/Geometry
+                "measurements": samp.measurements,
+                "notes": samp.notes
+            })
+        session_dicts.append(s_dict)
+        
+    # 4. Generate PDF
+    pdf_buffer = ReportService.generate_assessment_report(claim_dict, session_dicts)
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Claim_{claim.claim_number}.pdf"}
+    )
+
