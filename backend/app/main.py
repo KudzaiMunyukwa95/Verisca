@@ -20,7 +20,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origin_regex=".*", # Allow all origins via regex to support random Flutter Web ports
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
