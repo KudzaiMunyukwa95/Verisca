@@ -199,8 +199,12 @@ async def add_sample(
     db.commit()
     db.refresh(sample)
     
-    # Handle WKT response if needed
-    # For now relying on Pydantic or basic serialization
+    # Convert geometry to WKT for response serialization
+    from geoalchemy2.shape import to_shape
+    if sample.sample_location:
+        geom = to_shape(sample.sample_location)
+        sample.sample_location = geom.wkt
+    
     return sample
 
 # --- Reporting ---
