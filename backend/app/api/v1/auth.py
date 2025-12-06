@@ -29,84 +29,72 @@ async def generate_hash(password: str):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
     """
     Authenticate user and return JWT token.
-    
-    Args:
-        login_data: Login credentials (username, password, tenant_code)
-        db: Database session
-        
-    Returns:
-        LoginResponse with access token, user info, and tenant info
-        
-    Raises:
-        HTTPException: If credentials are invalid
+    Compatible with standard OAuth2 flows (e.g. Swagger UI, Postman).
     """
-    # Find tenant by code
-    print(f"[AUTH DEBUG] Looking for tenant with code: {login_data.tenant_code}")
-    tenant = db.query(Tenant).filter(
-        Tenant.tenant_code == login_data.tenant_code,
-        Tenant.is_active == True
-    ).first()
-    
-    if not tenant:
-        print(f"[AUTH DEBUG] Tenant not found: {login_data.tenant_code}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid tenant code",
-        )
-    
-    print(f"[AUTH DEBUG] Tenant found: {tenant.tenant_name} (ID: {tenant.id})")
-    
-    # Find user by username and tenant
-    print(f"[AUTH DEBUG] Looking for user: {login_data.username} in tenant {tenant.id}")
+    # 1. Find User (allow login by username OR email)
+    # Note: Logic assumes username/email is unique across system or we just pick first match.
+    # Given User model has unique=True for both username and email, this is safe.
     user = db.query(User).filter(
-        User.username == login_data.username,
-        User.tenant_id == tenant.id,
-        User.is_active == True
+        (User.username == form_data.username) | (User.email == form_data.username)
     ).first()
-    
+
     if not user:
-        print(f"[AUTH DEBUG] User not found: {login_data.username}")
+        # Avoid enumeration attacks technically, but for MVP debug log is fine
+        print(f"[AUTH] User not found: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    print(f"[AUTH DEBUG] User found: {user.email}")
-    print(f"[AUTH DEBUG] Verifying password...")
-    print(f"[AUTH DEBUG] Password hash from DB: {user.password_hash[:20]}...")
-    
-    # Verify password
-    if not verify_password(login_data.password, user.password_hash):
-        print(f"[AUTH DEBUG] Password verification FAILED")
+
+    # 2. Verify Password
+    if not verify_password(form_data.password, user.password_hash):
+        print(f"[AUTH] Password mismatch for user: {user.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid username or password",
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    print(f"[AUTH DEBUG] Password verification SUCCESS")
-    
-    # Update last login time
+
+    # 3. Check if User/Tenant is Active
+    if not user.is_active:
+         raise HTTPException(status_code=400, detail="User account is inactive")
+         
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    if not tenant or not tenant.is_active:
+         raise HTTPException(status_code=400, detail="Tenant is inactive")
+         
+    # 4. Generate Token
+    # Update last login
     user.last_login_at = datetime.utcnow()
     db.commit()
-    
-    # Create access token
+
+    # 4. Generate Token
+    # Update last login
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
     access_token = create_access_token(
         data={
-            "user_id": str(user.id),
+            "sub": str(user.id),
+            "user_id": str(user.id), # Required by get_current_user
             "tenant_id": str(tenant.id),
-            "username": user.username,
+            "role_id": str(user.role_id)
         }
     )
     
-    # Prepare response
-    return LoginResponse(
-        access_token=access_token,
-        user=UserResponse.model_validate(user),
-        tenant=TenantResponse.model_validate(tenant)
-    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+        "tenant": tenant
+    }
 
 
 async def get_current_user(
