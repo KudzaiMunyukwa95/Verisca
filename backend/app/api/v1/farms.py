@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select, or_, text
 from typing import List, Optional
 from datetime import datetime
+from uuid import UUID
 
 from app.db.session import get_db
 from app.api.v1.auth import get_current_user

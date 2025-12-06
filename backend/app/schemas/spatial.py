@@ -102,7 +102,7 @@ class FieldResponse(FieldBase):
 
 class SamplingRequest(BaseModel):
     minimum_samples: int = Field(5, ge=3, le=50)
-    sampling_method: str = Field("random", regex="^(random|grid|stratified)$")
+    sampling_method: str = Field("random", pattern="^(random|grid|stratified)$")
     edge_buffer_meters: float = Field(5.0, ge=0.0)
     min_distance_meters: float = Field(20.0, ge=1.0)
 

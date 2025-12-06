@@ -15,7 +15,7 @@ def apply_migration():
         cur = conn.cursor()
         
         # Read SQL file
-        with open("database/migrations/01_spatial_tables.sql", "r") as f:
+        with open("../database/migrations/01_spatial_tables.sql", "r") as f:
             sql_commands = f.read()
             
         print("Executing migration...")
