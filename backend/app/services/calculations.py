@@ -298,13 +298,20 @@ class CalculationService:
             total_damage_pct += sample_total_loss
 
         avg_loss = total_damage_pct / len(samples) if samples else 0
+        avg_potential_yield = 100.0 - avg_loss
         
-        # Seed Exhibit 17 (Shelling percentage)
+        # Seed lookup tables (if needed)
         await CalculationService.seed_exhibit_17(db)
-        # Seed Exhibit 23 (Moisture Adjustment)
         await CalculationService.seed_exhibit_23(db)
-        # Seed Exhibit 24 (Test Weight)
         await CalculationService.seed_exhibit_24(db)
+        
+        return {
+            "method": "hail_damage",
+            "growth_stage": growth_stage,
+            "loss_percentage": round(avg_loss, 1),
+            "average_potential_yield_pct": round(avg_potential_yield, 1),
+            "sample_details": processed_samples
+        }
 
     @staticmethod
     async def calculate_weight_method(
