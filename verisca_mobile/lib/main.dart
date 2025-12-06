@@ -4,6 +4,7 @@ import 'features/auth/auth_provider.dart';
 import 'features/auth/login_screen.dart';
 import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/dashboard_screen.dart';
+import 'features/assessment/assessment_provider.dart';
 
 void main() {
   runApp(const VeriscaApp());
@@ -18,6 +19,7 @@ class VeriscaApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthStatus()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
+        ChangeNotifierProvider(create: (_) => AssessmentProvider()),
       ],
       child: MaterialApp(
         title: 'Verisca Mobile',

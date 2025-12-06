@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'dashboard_provider.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../models/claim.dart';
+import 'claim_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -95,7 +96,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              // TODO: Navigate to Claim Details / Assessment
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ClaimDetailScreen(claim: claim),
+                                ),
+                              );
                             },
                           ),
                         );
