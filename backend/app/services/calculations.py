@@ -623,6 +623,113 @@ class CalculationService:
             "sample_details": processed_samples
         }
 
+    @staticmethod
+    async def calculate_replanting_analysis(
+        normal_yield: float,
+        price: float,
+        share: float,
+        stand_pct: float,
+        replant_cost: float,
+        replant_factor: float
+    ) -> Dict[str, Any]:
+        """
+        Calculates whether it is economical to replant (USDA Part 3).
+        """
+        # 1. Value of Keeping Current Stand
+        # Yield Potential = Normal Yield * (Stand % / 100)
+        yield_keep = normal_yield * (stand_pct / 100.0)
+        value_keep = yield_keep * price * share
+        
+        # 2. Value of Replanting
+        # Replanted Yield = Normal Yield * Replant Factor (penalty for late start)
+        yield_replant = normal_yield * replant_factor
+        gross_value_replant = yield_replant * price * share
+        net_value_replant = gross_value_replant - replant_cost
+        
+        # 3. Recommendation
+        is_replant_economical = net_value_replant > value_keep
+        recommendation = "REPLANT" if is_replant_economical else "KEEP"
+        
+        # 4. Replanting Payment Calculation (USDA Formula)
+        # Usually: Lesser of (20% of guarantee or 8 bu) * Price * Share * Acres
+        # We simplify to Per Acre payment amount here.
+        # Max standard payment is typically 8 bushels x Price.
+        payment_bu_limit = 8.0
+        payment_amount = payment_bu_limit * price * share
+        
+        # Breakeven: How much yield gain needed to cover cost?
+        # Cost / Price = Bushels needed
+        breakeven_bu = replant_cost / price if price > 0 else 0
+        
+        return {
+            "recommendation": recommendation,
+            "keep_projected_value": round(value_keep, 2),
+            "replant_projected_value": round(net_value_replant, 2),
+            "replanting_payment_amount": round(payment_amount, 2),
+            "breakeven_yield_diff": round(breakeven_bu, 1)
+        }
+
+    @staticmethod
+    async def calculate_stage_modification(
+        days_from_planting: int,
+        maturity_days: int
+    ) -> Dict[str, Any]:
+        """
+        Adjusts growth stage for short-season varieties (Exhibit 16).
+        Standard Corn is assumed ~120 days.
+        """
+        standard_maturity = 120.0
+        
+        # Modification Factor
+        # If variety is 90 days, it moves 1.33x faster than 120 day corn.
+        # Factor = 120 / 90 = 1.33
+        factor = standard_maturity / float(maturity_days)
+        
+        # Equivalent Standard Days
+        standard_days_equiv = days_from_planting * factor
+        
+        # Map Standard Days to Stage (Approximate USDA timeline)
+        # Emergence: 0-20 days (VE-V2)
+        # Knee High: 35 days (V6)
+        # Tassel: 65-75 days (VT)
+        # Silk: 75-80 days (R1)
+        # Dough/Dent: 90+ days
+        
+        stage = "Unknown"
+        lookup_stage = "Unknown"
+        
+        sd = standard_days_equiv
+        if sd < 15: 
+            stage = "VE-V2"
+            lookup_stage = "Emergence"
+        elif sd < 30:
+            stage = "V3-V5"
+            lookup_stage = "7thLeaf" # Approx start of hail charts
+        elif sd < 45:
+            stage = "V6-V8"
+            lookup_stage = "8thLeaf"
+        elif sd < 60:
+            stage = "V9-V12"
+            lookup_stage = "10thLeaf"
+        elif sd < 75:
+            stage = "VT (Tassel)"
+            lookup_stage = "tasseled"
+        elif sd < 90:
+            stage = "R1-R2 (Silk/Blister)"
+            lookup_stage = "Silked"
+        elif sd < 105:
+            stage = "R3-R4 (Milk/Dough)"
+            lookup_stage = "Milk"
+        else:
+            stage = "R5+ (Dent/Mature)"
+            lookup_stage = "Mature"
+            
+        return {
+            "adjusted_growth_stage": stage,
+            "standard_equivalent_days": int(standard_days_equiv),
+            "lookup_table_stage": lookup_stage
+        }
+
     # --- Seeding Helpers (Additional) ---
     
     @staticmethod

@@ -190,6 +190,45 @@ async def calculate_tonnage_method(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+from app.schemas.calculations import ReplantingRequest, ReplantingResult, StageModRequest, StageModResult
+
+@router.post("/replanting-analysis", response_model=ReplantingResult)
+async def analyze_replanting_decision(
+    request: ReplantingRequest,
+    # db: Session = Depends(get_db) # Not strictly needed if no lookup
+):
+    """
+    Financial analysis for Replant vs. Keep decision (USDA Part 3).
+    """
+    try:
+        result = await CalculationService.calculate_replanting_analysis(
+            normal_yield=request.normal_yield_bu_acre,
+            price=request.price_per_bu,
+            share=request.share_percent,
+            stand_pct=request.surviving_stand_pct,
+            replant_cost=request.replanting_cost_per_acre,
+            replant_factor=request.replanted_yield_factor
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/stage-modification", response_model=StageModResult)
+async def calculate_stage_modification(
+    request: StageModRequest,
+):
+    """
+    Adjusted growth stage for short-season varieties (Exhibit 16).
+    """
+    try:
+        result = await CalculationService.calculate_stage_modification(
+            days_from_planting=request.days_from_planting,
+            maturity_days=request.maturity_days
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.post("/seed-tables", status_code=201)
 async def seed_lookup_tables(
     db: Session = Depends(get_db),

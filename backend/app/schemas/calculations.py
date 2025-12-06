@@ -35,6 +35,32 @@ class SampleMeasurement(BaseModel):
     length_measured_m: float = 10.0
     row_width_m: float = 0.9
 
+class ReplantingRequest(BaseModel):
+    field_area_acres: float = 0.0 # Not used for per-acre calc but good for records
+    normal_yield_bu_acre: float
+    price_per_bu: float
+    share_percent: float = 1.0
+    surviving_stand_pct: float
+    replanting_cost_per_acre: float
+    replanted_yield_factor: float = 0.9
+
+class ReplantingResult(BaseModel):
+    recommendation: str
+    keep_projected_value: float
+    replant_projected_value: float
+    replanting_payment_amount: float
+    breakeven_yield_diff: float
+
+class StageModRequest(BaseModel):
+    days_from_planting: int
+    maturity_days: int
+    current_growth_stage_observed: Optional[str] = None
+
+class StageModResult(BaseModel):
+    adjusted_growth_stage: str
+    standard_equivalent_days: int
+    lookup_table_stage: str
+
 class CalculationRequest(BaseModel):
     growth_stage: str
     normal_plant_population: int = 40000
