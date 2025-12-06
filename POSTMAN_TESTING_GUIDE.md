@@ -1,8 +1,503 @@
-# Verisca API Testing Guide - Postman
+# Verisca API Testing Guide - PDF & Sync Endpoints
 
 ## 📋 Overview
 
-This guide will walk you through testing the Verisca API endpoints using Postman, with a focus on **PDF Report Generation** and **Sync Endpoints**.
+This guide focuses on testing the **remaining untested endpoints**: PDF Report Generation and Sync functionality.
+
+### ✅ Already Tested (Per verisca_streamlined_implementation.md)
+
+Based on the checkpoints document, these endpoints are already working:
+
+- **Checkpoint 1**: ✅ Spatial Operations (Create Farm with GPS)
+- **Checkpoint 2**: ✅ Field Boundaries (Create Field with polygon)
+- **Checkpoint 3**: ✅ Sampling Points Generation
+- **Checkpoint 4**: ✅ Claims Creation
+- **Checkpoint 5**: ✅ USDA Calculations (Stand Reduction)
+
+### 🎯 What We're Testing Now
+
+- **PDF Report Generation** - Generate professional assessment reports
+- **Sync Down** - Download claims for offline work
+- **Sync Up** - Upload offline assessment data
+
+---
+
+## � Getting Started
+
+### Prerequisites
+
+1. **Backend Server Running**
+   ```powershell
+   cd c:\Users\kmunyukwa.AONZWARSHRE\Downloads\Verisca
+   .\venv\Scripts\Activate
+   cd backend
+   uvicorn app.main:app --reload
+   ```
+   
+   ✅ Verify: http://127.0.0.1:8000 shows `{"message": "Verisca API", ...}`
+
+2. **Postman Installed**
+   - Download: https://www.postman.com/downloads/
+
+3. **Test Data Exists**
+   - You should already have: Farm, Field, Claim, Assessment Session, and Samples from previous testing
+   - If not, run the full collection first (steps 1-9)
+
+---
+
+## 📥 Import Postman Collection
+
+1. Open Postman
+2. Click **Import** → **File**
+3. Select: `Verisca_API_Collection.postman_collection.json`
+4. Click **Import**
+
+---
+
+## 🧪 Testing Workflow
+
+### Quick Setup (If You Have Existing Data)
+
+If you already have a claim with samples from previous testing:
+
+1. **Login** - Get fresh token
+2. **Skip to Step 10** - Test PDF generation directly
+
+### Full Workflow (If Starting Fresh)
+
+Run all steps 1-13 in order.
+
+---
+
+## 📄 TEST 1: PDF REPORT GENERATION
+
+### Background
+
+This endpoint generates a professional PDF assessment report containing:
+- Claim details (number, status, peril, date of loss)
+- Assessment session information
+- Field samples table with measurements
+- Final appraisal results
+
+### How to Test
+
+**Endpoint**: `4. PDF Report (TEST THIS) > Generate PDF Report`
+
+**Step-by-Step**:
+
+1. **Ensure Prerequisites**:
+   - You have a `claim_id` with at least one assessment session
+   - The session has sample points added
+   - Login token is fresh (re-run Login if needed)
+
+2. **Open the Request** in Postman:
+   - Navigate to folder: `4. PDF Report (TEST THIS)`
+   - Click: `Generate PDF Report`
+
+3. **Verify Variables**:
+   - Check that `{{claim_id}}` variable is set
+   - Check that `{{token}}` variable is set
+   - (These should auto-populate from previous requests)
+
+4. **Send Request**:
+   - Click the **dropdown arrow** next to "Send" button
+   - Select **"Send and Download"** (NOT just "Send")
+   - Choose where to save the PDF
+
+5. **✅ Expected Results**:
+   - Status: `200 OK`
+   - Content-Type: `application/pdf`
+   - PDF file downloads successfully
+   - File size: > 5 KB
+
+6. **Verify PDF Contents**:
+   
+   Open the downloaded PDF and check for:
+   
+   - ✅ **Header**: "Loss Assessment Report: CLM-2025-XXXXX"
+   - ✅ **Claim Details Table**:
+     - Status (e.g., "IN_PROGRESS")
+     - Date of Loss
+     - Peril Type (e.g., "hail")
+     - Farm/Field IDs
+   
+   - ✅ **Assessment Session Section**:
+     - Date Started
+     - Assessment Method (e.g., "hail_damage")
+     - Final Appraisal (if calculated)
+   
+   - ✅ **Field Samples Table**:
+     - Sample numbers (1, 2, 3, etc.)
+     - GPS location status
+     - Measurements (truncated)
+     - Notes
+
+### Common Issues
+
+❌ **Error 500: Internal Server Error**
+- **Cause**: Missing samples or session data
+- **Fix**: Verify samples were added successfully (run steps 7-9)
+- **Check**: Backend logs for detailed error
+
+❌ **Error 404: Not Found**
+- **Cause**: Invalid `claim_id`
+- **Fix**: Re-run "Create Claim" request or check variable value
+
+❌ **PDF is blank or corrupted**
+- **Cause**: Missing `reportlab` library
+- **Fix**: `pip install reportlab` in backend environment
+
+❌ **No calculated_result in PDF**
+- **Cause**: Session doesn't have calculation results yet
+- **Expected**: This is normal if you haven't run calculations
+- **Note**: PDF will still generate with sample data
+
+---
+
+## 🔄 TEST 2: SYNC DOWN (Download Claims)
+
+### Background
+
+This endpoint simulates a mobile app downloading claims and related data for offline work. It returns:
+- Claims assigned to the current user
+- Related farm data
+- Related field data
+- Server timestamp
+
+### How to Test
+
+**Endpoint**: `5. Sync Endpoints (TEST THESE) > Sync Down - Download Claims`
+
+**Step-by-Step**:
+
+1. **Open the Request** in Postman:
+   - Navigate to: `5. Sync Endpoints (TEST THESE)`
+   - Click: `Sync Down - Download Claims`
+
+2. **Send Request**:
+   - Click **Send**
+
+3. **✅ Expected Results**:
+   - Status: `200 OK`
+   - Response body contains:
+     ```json
+     {
+       "timestamp": "2025-12-06T12:34:56.789Z",
+       "claims": [...],
+       "farms": [...],
+       "fields": [...]
+     }
+     ```
+
+4. **Verify Response Data**:
+   
+   - ✅ **Timestamp**: Current server time in ISO format
+   - ✅ **Claims Array**: 
+     - Should contain claims assigned to current user
+     - Each claim has: id, claim_number, status, farm_id, field_id, etc.
+   
+   - ✅ **Farms Array**:
+     - Contains farms related to the claims
+     - Each farm has: id, farm_code, farm_name, location, etc.
+   
+   - ✅ **Fields Array**:
+     - Contains fields related to the claims
+     - Each field has: id, field_code, field_area, boundary, etc.
+
+### Testing Scenarios
+
+**Scenario 1: No Assigned Claims**
+- If arrays are empty, the user has no assigned claims
+- This is expected for admin user in testing
+- **To test properly**: Assign a claim to the current user first
+
+**Scenario 2: With Assigned Claims**
+- Arrays should contain the assigned claim and related data
+- Verify data completeness for offline use
+
+### Common Issues
+
+❌ **Empty Arrays**
+- **Cause**: No claims assigned to current user
+- **Fix**: The sync logic filters by `assigned_assessor_id`
+- **Workaround**: Modify claim to assign it to admin user
+
+❌ **Error 401: Unauthorized**
+- **Cause**: Token expired
+- **Fix**: Re-run Login request to get fresh token
+
+---
+
+## 🔄 TEST 3: SYNC DOWN - INCREMENTAL
+
+### Background
+
+This tests incremental sync - only downloading data modified since a specific timestamp.
+
+### How to Test
+
+**Endpoint**: `5. Sync Endpoints (TEST THESE) > Sync Down - Incremental (with last_sync)`
+
+**Step-by-Step**:
+
+1. **Open the Request** in Postman
+
+2. **Modify the Timestamp**:
+   - Find the query parameter: `last_sync`
+   - Current value: `2025-12-06T10:00:00`
+   - **Change to 1 hour ago**: Use current time minus 1 hour
+   - **Or change to yesterday**: To get all recent data
+
+3. **Send Request**:
+   - Click **Send**
+
+4. **✅ Expected Results**:
+   - Status: `200 OK`
+   - Only returns claims updated after the `last_sync` timestamp
+   - Response format same as regular sync down
+
+### Testing Scenarios
+
+**Test 1: Recent Sync (1 hour ago)**
+```
+?last_sync=2025-12-06T13:00:00
+```
+- Should return only claims created/updated in last hour
+
+**Test 2: Old Sync (1 week ago)**
+```
+?last_sync=2025-11-29T00:00:00
+```
+- Should return all recent claims
+
+**Test 3: Future Timestamp**
+```
+?last_sync=2025-12-07T00:00:00
+```
+- Should return empty arrays (no future data)
+
+---
+
+## 🔄 TEST 4: SYNC UP (Upload Assessment Data)
+
+### Background
+
+This endpoint simulates a mobile app uploading offline assessment data to the server. It accepts:
+- Assessment sessions created offline
+- Sample points collected offline
+
+### How to Test
+
+**Endpoint**: `5. Sync Endpoints (TEST THESE) > Sync Up - Upload Assessment Data`
+
+**Step-by-Step**:
+
+1. **Open the Request** in Postman
+
+2. **Generate New UUID**:
+   - Visit: https://www.uuidgenerator.net/
+   - Copy a new UUID (e.g., `550e8400-e29b-41d4-a716-446655440000`)
+   - Replace the `id` value in the request body
+
+3. **Verify Request Body**:
+   ```json
+   {
+     "sessions": [
+       {
+         "id": "YOUR-NEW-UUID-HERE",
+         "claim_id": "{{claim_id}}",
+         "assessment_method": "stand_reduction",
+         "growth_stage": "V6",
+         "date_completed": "2025-12-06T12:00:00",
+         "calculated_result": {
+           "loss_percentage": 15.5,
+           "average_potential_yield_pct": 84.5
+         },
+         "created_at": "2025-12-06T10:00:00"
+       }
+     ],
+     "samples": []
+   }
+   ```
+
+4. **Send Request**:
+   - Click **Send**
+
+5. **✅ Expected Results**:
+   - Status: `200 OK`
+   - Response:
+     ```json
+     {
+       "status": "success",
+       "synced": {
+         "sessions": ["YOUR-UUID"],
+         "samples": []
+       }
+     }
+     ```
+
+6. **Verify in Database**:
+   - The session should now exist in the database
+   - You can verify by listing sessions for the claim
+
+### Testing Scenarios
+
+**Scenario 1: New Session (New UUID)**
+- Should create a new assessment session
+- Status: `SYNCED`
+
+**Scenario 2: Update Existing Session (Reuse UUID)**
+- Use the session_id from Step 5 (Create Assessment Session)
+- Should update the existing session
+
+**Scenario 3: With Samples**
+- Add sample data to the `samples` array:
+  ```json
+  "samples": [
+    {
+      "id": "ANOTHER-NEW-UUID",
+      "session_id": "SESSION-UUID",
+      "sample_number": 1,
+      "lat": -17.8252,
+      "lng": 31.0332,
+      "measurements": {...}
+    }
+  ]
+  ```
+- Should create both session and samples
+
+### Common Issues
+
+❌ **Error 400: Bad Request**
+- **Cause**: Invalid UUID format
+- **Fix**: Ensure UUID is in correct format (8-4-4-4-12 hex digits)
+
+❌ **Error 404: Claim not found**
+- **Cause**: Invalid `claim_id`
+- **Fix**: Verify `{{claim_id}}` variable is set correctly
+
+❌ **Partial Success**
+- **Cause**: Some sessions succeeded, others failed
+- **Check**: Response will show which IDs were synced
+
+---
+
+## 🎯 Complete Test Checklist
+
+### Minimal Test (PDF & Sync Only)
+
+If you have existing test data:
+
+- [ ] 1. Login (get fresh token)
+- [ ] 2. **Generate PDF Report** 📄 ← **MAIN TEST**
+- [ ] 3. **Sync Down** 🔄 ← **MAIN TEST**
+- [ ] 4. **Sync Down - Incremental** 🔄 ← **MAIN TEST**
+- [ ] 5. **Sync Up** 🔄 ← **MAIN TEST**
+
+### Full Test (Complete Workflow)
+
+If starting fresh:
+
+- [ ] 1. Login
+- [ ] 2. Create Farm
+- [ ] 3. Create Field
+- [ ] 4. Create Claim
+- [ ] 5. Create Assessment Session
+- [ ] 6. Add Sample Point 1
+- [ ] 7. Add Sample Point 2
+- [ ] 8. Add Sample Point 3
+- [ ] 9. **Generate PDF Report** 📄
+- [ ] 10. **Sync Down** 🔄
+- [ ] 11. **Sync Down - Incremental** 🔄
+- [ ] 12. **Sync Up** 🔄
+
+---
+
+## ✅ Success Criteria
+
+### PDF Report Test
+- ✅ Status: `200 OK`
+- ✅ PDF downloads successfully
+- ✅ PDF opens without errors
+- ✅ Contains claim details
+- ✅ Contains assessment session info
+- ✅ Contains samples table
+- ✅ File size > 5 KB
+
+### Sync Down Test
+- ✅ Status: `200 OK`
+- ✅ Response has `timestamp`, `claims`, `farms`, `fields`
+- ✅ Arrays contain expected data
+- ✅ Response time < 2 seconds
+
+### Sync Up Test
+- ✅ Status: `200 OK`
+- ✅ Response: `{"status": "success", ...}`
+- ✅ Session created/updated in database
+- ✅ No data corruption
+
+---
+
+## 🐛 Troubleshooting
+
+### General Issues
+
+**401 Unauthorized**
+- Token expired → Re-run Login
+- Token not set → Check `{{token}}` variable
+
+**404 Not Found**
+- Invalid ID → Check collection variables
+- Resource doesn't exist → Re-run prerequisite steps
+
+**500 Internal Server Error**
+- Check backend logs in terminal
+- Verify database connection
+- Check for missing dependencies
+
+### PDF-Specific Issues
+
+**Empty PDF**
+- No samples exist → Add samples first
+- Missing session → Create session first
+
+**PDF Generation Timeout**
+- Large dataset → Normal for many samples
+- Server issue → Check backend logs
+
+### Sync-Specific Issues
+
+**Empty Arrays in Sync Down**
+- No assigned claims → Normal for admin user
+- Modify sync logic for testing
+
+**Sync Up Fails**
+- Invalid UUID → Generate new UUID
+- Invalid claim_id → Check variable
+
+---
+
+## 📚 Additional Resources
+
+- **Backend Logs**: Check terminal running uvicorn for detailed errors
+- **Swagger UI**: http://127.0.0.1:8000/api/docs for interactive testing
+- **Database**: Use pgAdmin to verify data persistence
+
+---
+
+## 🎉 Next Steps
+
+After completing these tests:
+
+1. ✅ Document any issues found
+2. 🔧 Fix bugs if any
+3. 📝 Update collection with fixes
+4. 🚀 Proceed with implementation plan (remaining endpoints)
+
+---
+
+**Happy Testing! 🚀**
+
 
 ---
 

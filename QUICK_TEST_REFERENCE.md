@@ -1,8 +1,25 @@
-# Verisca API - Quick Test Reference
+# Verisca API - Quick Test Reference (PDF & Sync)
+
+## ✅ Already Tested
+
+Per `verisca_streamlined_implementation.md` checkpoints:
+- ✅ Create Farm (Checkpoint 1)
+- ✅ Create Field (Checkpoint 2)
+- ✅ Generate Sampling Points (Checkpoint 3)
+- ✅ Create Claim (Checkpoint 4)
+- ✅ USDA Calculations (Checkpoint 5)
+
+## 🎯 What to Test Now
+
+### 1. PDF Report Generation
+### 2. Sync Down (Download)
+### 3. Sync Up (Upload)
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Start Backend
+### Start Backend
 ```powershell
 cd c:\Users\kmunyukwa.AONZWARSHRE\Downloads\Verisca
 .\venv\Scripts\Activate
@@ -10,57 +27,52 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
-### 2. Import Postman Collection
+### Import Collection
 File: `Verisca_API_Collection.postman_collection.json`
-
-### 3. Run Tests in Order
-1. Login
-2. Create Farm
-3. Create Field  
-4. Create Claim
-5. Create Assessment Session
-6. Add Sample Points (1, 2, 3)
-7. **Generate PDF Report** ← Use "Send and Download"
-8. **Sync Down** ← Test offline download
-9. **Sync Up** ← Test offline upload
 
 ---
 
-## 📄 PDF Report Test
+## 📄 TEST 1: PDF Report
 
 **Endpoint**: `GET /api/v1/claims/{claim_id}/report`
 
-**How to Test**:
-1. Click dropdown next to "Send"
-2. Select "Send and Download"
+**Steps**:
+1. Open "Generate PDF Report" request
+2. Click dropdown → **"Send and Download"**
 3. Save PDF file
-4. Open and verify contents
+4. Open and verify
 
-**Expected PDF Contents**:
-- Claim number and details
-- Assessment session info
-- Sample points table
-- Measurements and notes
+**Expected**:
+- Status: 200 OK
+- PDF contains: Claim details, Session info, Samples table
 
 ---
 
-## 🔄 Sync Tests
+## 🔄 TEST 2: Sync Down
 
-### Sync Down (Download)
 **Endpoint**: `GET /api/v1/sync/down`
 
 **Returns**:
 ```json
 {
-  "timestamp": "2025-12-06T12:00:00",
+  "timestamp": "...",
   "claims": [...],
   "farms": [...],
   "fields": [...]
 }
 ```
 
-### Sync Up (Upload)
+**Note**: May be empty if no claims assigned to user
+
+---
+
+## 🔄 TEST 3: Sync Up
+
 **Endpoint**: `POST /api/v1/sync/up`
+
+**Before Testing**:
+1. Get new UUID from: https://www.uuidgenerator.net/
+2. Replace `id` in request body
 
 **Body**:
 ```json
@@ -68,40 +80,33 @@ File: `Verisca_API_Collection.postman_collection.json`
   "sessions": [{
     "id": "NEW-UUID-HERE",
     "claim_id": "{{claim_id}}",
-    "assessment_method": "stand_reduction",
     ...
   }],
   "samples": []
 }
 ```
 
-**Get UUID**: https://www.uuidgenerator.net/
+**Expected**: `{"status": "success", ...}`
 
 ---
 
-## ✅ Success Checklist
+## ✅ Minimal Checklist
 
-- [ ] Backend running on http://127.0.0.1:8000
-- [ ] Logged in successfully (token saved)
-- [ ] Farm created (ID saved)
-- [ ] Field created (ID saved)
-- [ ] Claim created (ID saved)
-- [ ] Session created (ID saved)
-- [ ] 3 samples added
-- [ ] PDF generated and downloaded ✅
-- [ ] PDF opens and shows data ✅
-- [ ] Sync down returns data ✅
-- [ ] Sync up succeeds ✅
+- [ ] Login (get token)
+- [ ] PDF Report (Send and Download)
+- [ ] Sync Down
+- [ ] Sync Up (with new UUID)
 
 ---
 
-## 🐛 Common Issues
+## 🐛 Quick Fixes
 
-**PDF Error 500**: Check samples exist
-**Sync Empty Arrays**: Claims not assigned to user
-**401 Unauthorized**: Re-run Login request
+**PDF Error 500**: Add samples first
+**Sync Empty**: No assigned claims (normal)
+**401 Error**: Re-run Login
 
 ---
 
 ## 📚 Full Guide
 See: `POSTMAN_TESTING_GUIDE.md`
+
