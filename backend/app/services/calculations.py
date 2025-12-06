@@ -231,6 +231,16 @@ class CalculationService:
         processed_samples = []
         total_damage_pct = 0
         
+        # Breakdown accumulator
+        damage_breakdown = {
+            "stand_reduction": 0.0,
+            "defoliation": 0.0,
+            "stalk_damage": 0.0,
+            "growing_point": 0.0,
+            "ear_damage": 0.0,
+            "other_direct": 0.0
+        }
+        
         # Determine applicable Stand Reduction table
         stand_table = None
         if growth_stage in ["7thLeaf", "8thLeaf", "9thLeaf", "10thLeaf"]:
@@ -275,14 +285,33 @@ class CalculationService:
                      pass
 
             # --- 3. Other Direct Damage ---
-            # e.g., Ear Damage, Crippled Plants - usually calculated as direct % addition
+            
+            # A. Stalk Damage
+            # Map severity to percentage using simplified logic (approximate)
+            stalk_severity = sample.get('stalk_damage_severity', 'none').lower()
+            stalk_damage_pct = 0.0
+            if stalk_severity == 'light': stalk_damage_pct = 10.0
+            elif stalk_severity == 'moderate': stalk_damage_pct = 35.0
+            elif stalk_severity == 'severe': stalk_damage_pct = 75.0
+            
+            # B. Growing Point / Heart Damage (Early season)
+            growing_point_pct = float(sample.get('growing_point_damage_pct', 0.0))
+            
+            # C. Ear / Kernel Damage (Late season)
+            ear_damage_pct = float(sample.get('ear_damage_pct', 0.0))
+            
+            # D. Other Direct (Crippled, etc.)
             direct_damage_input = float(sample.get('direct_damage_pct', 0.0))
             
+            # Total Direct Damage
+            total_direct = stand_damage_pct + stalk_damage_pct + growing_point_pct + ear_damage_pct + direct_damage_input
+            total_direct = min(100.0, total_direct)
+            
             # Total Sample Damage
-            # Note: USDA adds them, but total cannot exceed 100%
-            # Detailed formula: (100 - StandLoss) * (DefoliationLoss) ... ? 
-            # USDA usually sums them: Total = Stand Reduction + Defoliation + Direct
-            sample_total_loss = stand_damage_pct + defoliation_damage_pct + direct_damage_input
+            # Formula: Total Damage = Direct Damage + Indirect (Defoliation)
+            # USDA sums them, but effectively Defoliation acts on remaining potential
+            # Simplified additive model per instructions, capped at 100%
+            sample_total_loss = total_direct + defoliation_damage_pct
             sample_total_loss = min(100.0, sample_total_loss)
             
             processed_samples.append({
@@ -291,14 +320,30 @@ class CalculationService:
                 "stand_damage_pct": round(stand_damage_pct, 1),
                 "defoliation_input_pct": round(percent_defoliation, 1),
                 "defoliation_damage_pct": round(defoliation_damage_pct, 1),
-                "direct_damage_pct": round(direct_damage_input, 1),
+                "stalk_damage_pct": round(stalk_damage_pct, 1),
+                "growing_point_damage_pct": round(growing_point_pct, 1),
+                "ear_damage_pct": round(ear_damage_pct, 1),
+                "direct_damage_other_pct": round(direct_damage_input, 1),
+                "total_direct_damage": round(total_direct, 1),
                 "total_sample_loss": round(sample_total_loss, 1)
             })
             
             total_damage_pct += sample_total_loss
+            
+            # Aggregate counts for breakdown
+            damage_breakdown["stand_reduction"] += stand_damage_pct
+            damage_breakdown["defoliation"] += defoliation_damage_pct
+            damage_breakdown["stalk_damage"] += stalk_damage_pct
+            damage_breakdown["growing_point"] += growing_point_pct
+            damage_breakdown["ear_damage"] += ear_damage_pct
+            damage_breakdown["other_direct"] += direct_damage_input
 
         avg_loss = total_damage_pct / len(samples) if samples else 0
         avg_potential_yield = 100.0 - avg_loss
+        
+        # Average breakdown
+        num_samples = len(samples) if samples else 1
+        avg_breakdown = {k: round(v / num_samples, 1) for k, v in damage_breakdown.items()}
         
         # Seed lookup tables (if needed)
         await CalculationService.seed_exhibit_17(db)
@@ -310,6 +355,7 @@ class CalculationService:
             "growth_stage": growth_stage,
             "loss_percentage": round(avg_loss, 1),
             "average_potential_yield_pct": round(avg_potential_yield, 1),
+            "damage_breakdown": avg_breakdown,
             "sample_details": processed_samples
         }
 
@@ -381,15 +427,35 @@ class CalculationService:
             # Step D: Apply Quality Adjustments
             bushels_adjusted = bushels_per_acre_raw * moisture_factor * test_weight_factor
             
+            # Additional Quality Deductions (Percentage Reductions)
+            # USDA: Deduct foreign material, damaged kernels, etc. from final yield
+            foreign_mat = float(sample.get('foreign_material_pct', 0.0)) / 100.0
+            damaged_ker = float(sample.get('damaged_kernels_pct', 0.0)) / 100.0
+            broken_ker = float(sample.get('broken_kernels_pct', 0.0)) / 100.0
+            heat_dmg = float(sample.get('heat_damage_pct', 0.0)) / 100.0
+            
+            total_deduction_pct = foreign_mat + damaged_ker + broken_ker + heat_dmg
+            
+            # Apply deduction: Final = Adjusted * (1 - TotalDeduction)
+            bushels_final = bushels_adjusted * (1.0 - total_deduction_pct)
+            
             processed_samples.append({
                 "sample_number": sample.get('sample_number'),
                 "raw_weight_lbs": weight_lbs,
                 "shelled_weight_lbs": round(shelled_weight, 1),
                 "yield_bu_acre_raw": round(bushels_per_acre_raw, 1),
-                "yield_bu_acre_adj": round(bushels_adjusted, 1)
+                "quality_adjustments": {
+                    "moisture_factor": moisture_factor,
+                    "test_weight_factor": test_weight_factor,
+                    "foreign_material_deduction": round(foreign_mat * 100, 1),
+                    "damaged_kernel_deduction": round(damaged_ker * 100, 1),
+                    "broken_kernel_deduction": round(broken_ker * 100, 1),
+                    "heat_damage_deduction": round(heat_dmg * 100, 1)
+                },
+                "yield_bu_acre_adj": round(bushels_final, 1)
             })
             
-            total_bushels_per_acre += bushels_adjusted
+            total_bushels_per_acre += bushels_final
             
         avg_yield = total_bushels_per_acre / len(samples) if samples else 0
         
@@ -401,7 +467,182 @@ class CalculationService:
             "sample_details": processed_samples
         }
 
+    @staticmethod
+    async def calculate_maturity_line_weight(
+        db: Session,
+        samples: List[Dict[str, Any]],
+        growth_stage: str,
+        expected_final_moisture: float = 15.0
+    ) -> Dict[str, Any]:
+        """
+        Calculates Yield for R3-R5 stages using Maturity Line Method.
+        Projects final yield based on kernel development (Milk Line).
+        """
+        processed_samples = []
+        total_projected_yield = 0
+        
+        # Development Factors based on Stage (Simplified approximations)
+        # R3 (Milk): ~40-50% of weight accumulated
+        # R4 (Dough): ~60-80% 
+        # R5 (Dent): ~85-95%
+        # Or better: use maturity line percentage directly if provided.
+        # Formula: Current Weight / Development % = Projected Final Weight
+        
+        for sample in samples:
+            weight_lbs = float(sample.get('weight_lbs', 0.0))
+            area_acres = float(sample.get('sample_area_acres', 0.01))
+            maturity_pct = float(sample.get('maturity_line_position', 0.0)) # 0-100%
+            
+            # Estimate % of final dry matter accumulated
+            # USDA logic: relate milk line to dry matter accumulation
+            # 0% milk line (R5 start) -> ~0% hard starch ?? No, Milk Line moves DOWN.
+            # 0% down (tip) = Start of R5
+            # 50% down = 95% yield accumulated? No, 50% line = 95% yield?
+            # USDA Rule of Thumb:
+            # Milk Stage (R3): 40% of final yield
+            # Late Dough (R4): 65% of final yield
+            # 1/2 Milk Line: 95% of final yield ??
+            # Let's use a simplified linear model or stage based factor for MVP.
+            
+            development_factor = 0.5 # Default fallback
+            if growth_stage.lower() in ['r3', 'milk']: 
+                development_factor = 0.45
+            elif growth_stage.lower() in ['r4', 'dough']: 
+                development_factor = 0.70
+            elif growth_stage.lower() in ['r5', 'dent']:
+                # Use milk line if available
+                if maturity_pct > 0:
+                    # 50% line -> ~90-95% weight
+                    # 25% line -> ~80% weight
+                    development_factor = 0.75 + (maturity_pct / 100.0) * 0.25
+                else:
+                    development_factor = 0.85
+                    
+            projected_weight = weight_lbs / development_factor if development_factor > 0 else 0
+            
+            # Standard Shelling 80% (Immature corn shelling is tricky, usually whole ear weight used with chart)
+            shelling_factor = 0.8
+            shelled_weight = projected_weight * shelling_factor
+            
+            bushels_sample = shelled_weight / 56.0
+            bushels_per_acre_proj = bushels_sample / area_acres
+            
+            processed_samples.append({
+                "sample_number": sample.get('sample_number'),
+                "current_weight_lbs": weight_lbs,
+                "maturity_line_pct": maturity_pct,
+                "development_factor_used": round(development_factor, 2),
+                "projected_yield_bu_acre": round(bushels_per_acre_proj, 1)
+            })
+            
+            total_projected_yield += bushels_per_acre_proj
+            
+        avg_yield = total_projected_yield / len(samples) if samples else 0
+        
+        return {
+            "method": "maturity_line_weight",
+            "growth_stage": growth_stage,
+            "avg_maturity_line_position": sum(s['maturity_line_pct'] for s in processed_samples) / len(processed_samples) if processed_samples else 0,
+            "projected_yield_bu_acre": round(avg_yield, 1),
+            "current_development_pct": round(sum(s['development_factor_used'] for s in processed_samples) / len(processed_samples) * 100, 1) if processed_samples else 0,
+            "sample_details": processed_samples
+        }
+
+    @staticmethod
+    async def calculate_tonnage_method(
+        db: Session,
+        samples: List[Dict[str, Any]],
+        moisture_pct: float,
+        visual_damage_pct: float = 0.0,
+        quality_grade: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculates Silage Tonnage.
+        Includes quality grading and moisture adjustment.
+        """
+        processed_samples = []
+        total_tons_per_acre = 0
+        
+        table_name = "exhibit21_silageMoisture"
+        # Seed table if needed
+        await CalculationService.seed_exhibit_21(db)
+        
+        # Determine Quality Grade (Manual or Auto)
+        final_grade = quality_grade.lower() if quality_grade else "fair"
+        
+        # Auto-calculate backup if visual damage provided
+        auto_grade = "poor"
+        if moisture_pct <= 65 and visual_damage_pct <= 10: auto_grade = "excellent"
+        elif moisture_pct <= 70 and visual_damage_pct <= 25: auto_grade = "good"
+        elif moisture_pct <= 75 and visual_damage_pct <= 50: auto_grade = "fair"
+        
+        # If manual not provided, use auto
+        if not quality_grade:
+            final_grade = auto_grade
+            
+        # Quality Multiplier (Placeholder logic)
+        # Excellent=1.0, Good=0.95, Fair=0.85, Poor=0.70
+        quality_map = {"excellent": 1.0, "good": 0.95, "fair": 0.85, "poor": 0.70}
+        quality_factor = quality_map.get(final_grade, 0.70)
+        
+        # Moisture Adjustment Factor
+        moisture_factor = 1.0
+        try:
+            moisture_factor = await CalculationService.get_lookup_value(db, table_name, moisture_pct, "factor")
+        except: pass
+        
+        for sample in samples:
+            fresh_weight = float(sample.get('fresh_weight_lbs', 0.0))
+            area_acres = float(sample.get('sample_area_acres', 0.001)) # 1/1000 standard
+            
+            # Tons = (Weight / 2000) / Acres
+            tons_raw = (fresh_weight / 2000.0) / area_acres
+            
+            # Adjust for moisture (standard 65%) and quality
+            tons_adj = tons_raw * moisture_factor * quality_factor
+            
+            processed_samples.append({
+                "sample_number": sample.get('sample_number'),
+                "fresh_weight_lbs": fresh_weight,
+                "tons_per_acre_raw": round(tons_raw, 1),
+                "tons_per_acre_adj": round(tons_adj, 1)
+            })
+            
+            total_tons_per_acre += tons_adj
+            
+        avg_tons = total_tons_per_acre / len(samples) if samples else 0
+            
+        return {
+            "method": "tonnage",
+            "tons_per_acre": round(avg_tons, 1), # Adjusted
+            "moisture_adjusted_tons": round(avg_tons / quality_factor, 1) if quality_factor else 0, # Just moisture adj
+            "quality_grade": final_grade,
+            "quality_multiplier": quality_factor,
+            "recommended_for_silage": avg_tons > 5.0, # Simple threshold
+            "tonnage_confidence": 0.85 if quality_grade else 0.70, # Lower confidence if auto-graded
+            "sample_details": processed_samples
+        }
+
     # --- Seeding Helpers (Additional) ---
+    
+    @staticmethod
+    async def seed_exhibit_21(db: Session):
+        table_name = "exhibit21_silageMoisture"
+        existing = db.execute(select(LookupTable).where(LookupTable.table_name == table_name)).first()
+        if existing: return
+        
+        # Silage Moisture Factors (Standard 65%)
+        # >65% reduces tonnage (water weight)
+        # <65% increases tonnage (dryer than standard)
+        # Factor = 35 / (100 - Actual %) ??? No, usually (100-Actual)/(100-Standard)
+        # Let's use a simplified table
+        data = [
+            (50.0, 1.4), (55.0, 1.25), (60.0, 1.15), (65.0, 1.0),
+            (70.0, 0.9), (75.0, 0.8), (80.0, 0.7)
+        ]
+        for m, f in data:
+            db.add(LookupTable(table_name=table_name, input_value=m, stage_or_condition="factor", output_value=f))
+        db.commit()
     
     @staticmethod
     async def seed_exhibit_17(db: Session):
@@ -434,10 +675,13 @@ class CalculationService:
         existing = db.execute(select(LookupTable).where(LookupTable.table_name == table_name)).first()
         if existing: return
         
-        # Test Weight Factors (Lbs/Bu) - Standard 56 lbs
-        # <50 lbs reduces yield
+        # Test Weight Factors (Lbs/Bu)
+        # USDA Standards: 56 lbs = 1.0
+        # Lower weights reduce yield: 54->0.98, 50->0.94, etc.
         data = [
-            (56.0, 1.0), (54.0, 0.98), (52.0, 0.96), (50.0, 0.94), (45.0, 0.89)
+            (56.0, 1.0), (55.0, 0.99), (54.0, 0.98), (53.0, 0.97), 
+            (52.0, 0.96), (51.0, 0.95), (50.0, 0.94), (49.0, 0.93),
+            (48.0, 0.92), (47.0, 0.91), (46.0, 0.90), (45.0, 0.89)
         ]
         for w, f in data:
              db.add(LookupTable(table_name=table_name, input_value=w, stage_or_condition="factor", output_value=f))

@@ -117,6 +117,79 @@ async def calculate_weight_method(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.post("/maturity-line-weight", response_model=CalculationResult)
+async def calculate_maturity_line_weight(
+    request: CalculationRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Perform on-the-fly Maturity Line Weight calculation (R3-R5).
+    """
+    sample_dicts = [sample.model_dump(exclude_unset=True) for sample in request.samples]
+    
+    try:
+        result = await CalculationService.calculate_maturity_line_weight(
+            db=db,
+            samples=sample_dicts,
+            growth_stage=request.growth_stage,
+            expected_final_moisture=request.expected_final_moisture
+        )
+        
+        # Adaptation for MVP Schema
+        result["average_potential_yield_pct"] = result["projected_yield_bu_acre"]
+        result["loss_percentage"] = 0.0 # Yield projection
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/tonnage-method", response_model=CalculationResult)
+async def calculate_tonnage_method(
+    request: CalculationRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Perform on-the-fly Tonnage Method calculation (Silage).
+    """
+    sample_dicts = [sample.model_dump(exclude_unset=True) for sample in request.samples]
+    
+    try:
+        # Check if quality grade provided in first sample or request level?
+        # Our schema puts quality_grade in SampleMeasurement for simplicity,
+        # but typically it's a field level or sample level thing.
+        # Let's check first sample for field-level defaults if needed, 
+        # or typical usage is sample-specific in the loop.
+        
+        # However, the calculate_tonnage_method signature expects single global quality inputs
+        # derived from request or samples. 
+        # Let's extract from the first sample or add to request?
+        # The service method signature: calculate_tonnage_method(..., moisture_pct, visual_damage_pct, quality_grade)
+        # We need to extract these.
+        
+        # Assuming moisture_pct is global in request
+        moisture = request.moisture_pct if request.moisture_pct else 65.0
+        
+        # Extract quality grade from first sample as default if exists
+        q_grade = None
+        if sample_dicts and 'quality_grade' in sample_dicts[0]:
+            q_grade = sample_dicts[0]['quality_grade']
+            
+        result = await CalculationService.calculate_tonnage_method(
+            db=db,
+            samples=sample_dicts,
+            moisture_pct=moisture,
+            quality_grade=q_grade
+        )
+        
+        # Adaptation for MVP Schema
+        result["loss_percentage"] = 0.0
+        result["average_potential_yield_pct"] = result["tons_per_acre"] # Mapping tons to yield field
+        result["growth_stage"] = request.growth_stage
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.post("/seed-tables", status_code=201)
 async def seed_lookup_tables(
     db: Session = Depends(get_db),
