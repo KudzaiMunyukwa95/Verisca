@@ -247,6 +247,19 @@ async def update_session(
         db.commit()
         db.refresh(session)
         
+        # FIX: Convert samples geometry to WKT for serialization
+        try:
+            from geoalchemy2.shape import to_shape
+            # Ensure samples are loaded (if not already by relationship)
+            for sample in session.samples:
+                if sample.sample_location is not None:
+                    # Check if it's already a string (WKT) or needs conversion
+                    if not isinstance(sample.sample_location, str):
+                        geom = to_shape(sample.sample_location)
+                        sample.sample_location = geom.wkt
+        except Exception as e:
+            print(f"Warning: Geometry conversion failed: {e}")
+
         # DEBUG: Catch serialization errors
         print(f"DEBUG: Calculated Result: {session.calculated_result}")
         try:
