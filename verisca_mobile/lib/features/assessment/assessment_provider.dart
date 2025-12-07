@@ -16,12 +16,14 @@ class AssessmentProvider extends ChangeNotifier {
   // Assessment State
   String? _currentSessionId;
   String? _currentClaimId;
+  String? _currentPerilType; // Track peril type
   List<dynamic> _samples = []; // We"ll define a proper model later or use dynamic for now
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get successMessage => _successMessage;
   String? get currentSessionId => _currentSessionId;
+  String? get currentPerilType => _currentPerilType;
   List<dynamic> get samples => _samples;
 
   final LocationService _locationService = LocationService();
@@ -79,7 +81,7 @@ class AssessmentProvider extends ChangeNotifier {
 
   // --- Assessment Session Logic ---
 
-  Future<bool> startSession(String claimId, String method, String growthStage) async {
+  Future<bool> startSession(String claimId, String method, String growthStage, {String perilType = 'HAIL'}) async {
     _isLoading = true;
     notifyListeners();
     try {
@@ -92,13 +94,14 @@ class AssessmentProvider extends ChangeNotifier {
           "growth_stage": growthStage,
           "weather_conditions": {"temp": "25C", "condition": "Sunny"},
           "crop_conditions": {"soil": "Moist"},
-          "assessor_notes": "Started via Mobile App"
+          "assessor_notes": "Started via Mobile App - Peril: $perilType"
         },
       );
 
       if (response.statusCode == 201) {
         _currentSessionId = response.data['id'];
         _currentClaimId = claimId;
+        _currentPerilType = perilType; // Store peril type
         _samples = []; // Reset samples for new session
         return true;
       }
@@ -216,14 +219,46 @@ class AssessmentProvider extends ChangeNotifier {
     try {
       final dio = ApiClient().dio;
 
-      // 2. Call Calculation Engine
-      final calcResponse = await dio.post(
-        '/api/v1/calculations/hail-damage', 
-        data: {
-          "growth_stage": growthStage, 
-          "normal_plant_population": 40000, 
+      // 2. Determine calculation endpoint based on peril type
+      String calcEndpoint;
+      Map<String, dynamic> calcPayload;
+      
+      // Default to hail if peril type not set
+      final peril = _currentPerilType ?? 'HAIL';
+      
+      if (peril == 'DROUGHT' || peril == 'WINDSTORM' || peril == 'FLOODING') {
+        // Use Stand Reduction Method
+        calcEndpoint = '/api/v1/calculations/stand-reduction';
+        calcPayload = {
+          "growth_stage": growthStage,
+          "normal_plant_population": 40000,
           "samples": flatSamples
-        }
+        };
+      } else if (peril == 'DISEASE' || peril == 'PEST') {
+        // Use Weight Method for disease/quality issues
+        calcEndpoint = '/api/v1/calculations/weight-method';
+        calcPayload = {
+          "growth_stage": growthStage,
+          "samples": flatSamples,
+          "moisture_pct": 14.0, // Default moisture
+          "test_weight_kg_hl": 72.0 // Default test weight
+        };
+      } else {
+        // Default to Hail Damage Method
+        calcEndpoint = '/api/v1/calculations/hail-damage';
+        calcPayload = {
+          "growth_stage": growthStage,
+          "normal_plant_population": 40000,
+          "samples": flatSamples
+        };
+      }
+      
+      print("Using calculation endpoint: $calcEndpoint for peril: $peril");
+      
+      // 3. Call Calculation Engine
+      final calcResponse = await dio.post(
+        calcEndpoint,
+        data: calcPayload
       );
 
       if (calcResponse.statusCode != 200) {

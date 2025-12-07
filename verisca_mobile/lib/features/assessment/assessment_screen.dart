@@ -14,18 +14,30 @@ class AssessmentScreen extends StatefulWidget {
 }
 
 class _AssessmentScreenState extends State<AssessmentScreen> {
-  final _growthStageController = TextEditingController(); // For simple selector or input
+  final _growthStageController = TextEditingController();
   String? _selectedGrowthStage;
+  String? _selectedPerilType; // NEW: Track selected peril
   
   final List<String> _growthStages = [
     "VE", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10",
     "VT", "R1", "R2", "R3", "R4", "R5", "R6"
   ];
+  
+  // NEW: Peril types
+  final Map<String, String> _perilTypes = {
+    "HAIL": "Hail Damage",
+    "DROUGHT": "Drought Stress",
+    "WINDSTORM": "Windstorm",
+    "FLOODING": "Flooding",
+    "DISEASE": "Disease/Pest",
+    "FIRE": "Fire Damage"
+  };
 
   @override
   void initState() {
     super.initState();
-    // Do NOT auto-start session anymore, user needs to select Stage first.
+    // Pre-select peril from claim if available
+    _selectedPerilType = widget.claim.perilType.name.toUpperCase();
   }
 
   @override
@@ -43,8 +55,23 @@ class _AssessmentScreenState extends State<AssessmentScreen> {
             children: [
               Text("Assessment Setup", style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
-              Text("Please confirm field conditions before sampling.", style: Theme.of(context).textTheme.bodyMedium),
+              Text("Select peril type and growth stage before sampling.", style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 32),
+              
+              // NEW: Peril Type Selection
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: "Peril Type",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warning_amber)
+                ),
+                value: _selectedPerilType,
+                items: _perilTypes.entries.map((e) => 
+                  DropdownMenuItem(value: e.key, child: Text(e.value))
+                ).toList(),
+                onChanged: (v) => setState(() => _selectedPerilType = v),
+              ),
+              const SizedBox(height: 16),
               
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: "Growth Stage", border: OutlineInputBorder()),
@@ -56,9 +83,14 @@ class _AssessmentScreenState extends State<AssessmentScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _selectedGrowthStage == null || provider.isLoading
+                  onPressed: _selectedGrowthStage == null || _selectedPerilType == null || provider.isLoading
                       ? null
-                      : () => provider.startSession(widget.claim.id, "hail", _selectedGrowthStage!),
+                      : () => provider.startSession(
+                          widget.claim.id, 
+                          _selectedPerilType!.toLowerCase(), 
+                          _selectedGrowthStage!,
+                          perilType: _selectedPerilType!
+                        ),
                   child: provider.isLoading 
                     ? const CircularProgressIndicator(color: Colors.white) 
                     : const Text("CONFIRM & START SAMPLING"),
