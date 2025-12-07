@@ -235,7 +235,7 @@ class AssessmentProvider extends ChangeNotifier {
       await dio.patch(
         '/api/v1/claims/$_currentClaimId/sessions/$_currentSessionId',
         data: {
-          "status": "COMPLETED",
+          "status": "completed",
           "calculated_result": result,
           "date_completed": DateTime.now().toIso8601String()
         }
