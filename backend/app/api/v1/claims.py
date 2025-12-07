@@ -226,26 +226,40 @@ async def update_session(
     current_user: User = Depends(get_current_user)
 ):
     """Update assessment session notes/status"""
-    session = db.execute(
-        select(AssessmentSession)
-        .join(Claim)
-        .where(
-            AssessmentSession.id == session_id,
-            AssessmentSession.claim_id == claim_id,
-            Claim.tenant_id == current_user.tenant_id
-        )
-    ).scalar_one_or_none()
-    
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        session = db.execute(
+            select(AssessmentSession)
+            .join(Claim)
+            .where(
+                AssessmentSession.id == session_id,
+                AssessmentSession.claim_id == claim_id,
+                Claim.tenant_id == current_user.tenant_id
+            )
+        ).scalar_one_or_none()
         
-    update_data = session_data.model_dump(exclude_unset=True)
-    for k, v in update_data.items():
-        setattr(session, k, v)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        update_data = session_data.model_dump(exclude_unset=True)
+        for k, v in update_data.items():
+            setattr(session, k, v)
+            
+        db.commit()
+        db.refresh(session)
         
-    db.commit()
-    db.refresh(session)
-    return session
+        # DEBUG: Catch serialization errors
+        print(f"DEBUG: Calculated Result: {session.calculated_result}")
+        try:
+            AssessmentSessionResponse.model_validate(session)
+        except Exception as validation_err:
+            print(f"DEBUG: Validation Error during response creation: {validation_err}")
+            raise validation_err
+
+        return session
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.delete("/{claim_id}/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
