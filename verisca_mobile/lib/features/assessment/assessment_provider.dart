@@ -189,4 +189,74 @@ class AssessmentProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+  Future<Map<String, dynamic>?> completeSession(String growthStage) async {
+    if (_currentSessionId == null) return null;
+    
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final dio = ApiClient().dio;
+
+      // 1. Prepare Calculation Request (Flatten measurements)
+      final List<Map<String, dynamic>> flatSamples = _samples.map((s) {
+        final m = s['measurements'] as Map<String, dynamic>;
+        return {
+          "sample_number": s['sample_number'],
+          "original_stand_count": m['original_stand_count'],
+          "destroyed_plants": m['destroyed_plants'],
+          "percent_defoliation": m['percent_defoliation'],
+          "stalk_damage_severity": m['stalk_damage_severity'], 
+          "growing_point_damage_pct": m['growing_point_damage_pct'],
+          "ear_damage_pct": m['ear_damage_pct'],
+          "direct_damage_pct": m['direct_damage_pct'],
+          "length_measured_m": m['length_measured_m'] ?? 10.0,
+          "row_width_m": m['row_width_m'] ?? 0.76,
+        };
+      }).toList();
+
+      // 2. Call Calculation Engine
+      final calcResponse = await dio.post(
+        '/api/v1/calculations/hail-damage', 
+        data: {
+          "growth_stage": growthStage, 
+          "normal_plant_population": 40000, 
+          "samples": flatSamples
+        }
+      );
+
+      if (calcResponse.statusCode != 200) {
+        throw Exception("Calculation failed");
+      }
+      
+      final result = calcResponse.data;
+      
+      // 3. Finalize Session
+      await dio.patch(
+        '/api/v1/claims/sessions/$_currentSessionId',
+        data: {
+          "status": "COMPLETED",
+          "calculated_result": result,
+          "date_completed": DateTime.now().toIso8601String()
+        }
+      );
+      
+      _successMessage = "Assessment Completed!";
+      return result;
+
+    } on DioException catch (e) {
+      if (e.response != null) {
+        _errorMessage = "Server Error: ${e.response?.data}";
+      } else {
+        _errorMessage = "Network Error: ${e.message}";
+      }
+      return null;
+    } catch (e) {
+      _errorMessage = "Completion failed: $e";
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }

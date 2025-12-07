@@ -140,6 +140,57 @@ class _AssessmentScreenState extends State<AssessmentScreen> {
                     },
                   ),
           ),
+
+          // Finish Session Button
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: provider.isLoading ? null : () async {
+                    final result = await provider.completeSession(_selectedGrowthStage ?? "V6");
+                    if (result != null && mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("Assessment Complete"),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.green, size: 64),
+                              const SizedBox(height: 16),
+                              Text("Final Loss: ${result['loss_percentage']}%", style: Theme.of(context).textTheme.headlineMedium),
+                              Text("Yield Potential: ${result['average_potential_yield_pct']}%"),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(ctx); // Close dialog
+                                Navigator.pop(context); // Exit screen
+                              },
+                              child: const Text("CLOSE"),
+                            )
+                          ],
+                        ),
+                      );
+                    } else if (mounted) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         SnackBar(content: Text(provider.errorMessage ?? "Completion failed"))
+                       );
+                    }
+                  },
+                  icon: const Icon(Icons.check),
+                  label: const Text("FINISH SESSION"),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700, 
+                    padding: const EdgeInsets.symmetric(vertical: 16)
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(

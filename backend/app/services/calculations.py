@@ -196,6 +196,96 @@ class CalculationService:
             "loss_percentage": round(loss_percentage, 2),
             "sample_details": processed_samples
         }
+
+    @staticmethod
+    async def calculate_hail_damage(
+        db: Session,
+        samples: List[Dict[str, Any]],
+        growth_stage: str,
+        normal_plant_population_per_ha: int = 40000
+    ) -> Dict[str, Any]:
+        """
+        Calculates Hail Damage (Stand Reduction + Defoliation + Direct).
+        """
+        processed_samples = []
+        total_loss_pct = 0
+        
+        # 1. Determine Tables
+        # Stand Reduction: Ex 13 (Early) or Ex 14 (Late)
+        stand_table = "exhibit13_hailStandReduction"
+        late_stages = ["11thLeaf", "12thLeaf", "13thLeaf", "14thLeaf", "15thLeaf", "16thLeaf", "tasseled", "silked"]
+        if growth_stage in late_stages:
+            stand_table = "exhibit14_hailStandReduction"
+            
+        defoliation_table = "exhibit15_leafLoss"
+        
+        # Seed tables if needed (Safe check)
+        await CalculationService.seed_exhibit_13(db)
+        await CalculationService.seed_exhibit_14(db)
+        await CalculationService.seed_exhibit_15(db)
+
+        for sample in samples:
+            loss_components = {}
+            
+            # A. Stand Reduction Loss
+            original = int(sample.get('original_stand_count', 100))
+            destroyed = int(sample.get('destroyed_plants', 0))
+            stand_reduction_pct = (destroyed / original * 100) if original > 0 else 0
+            
+            stand_loss_yield = stand_reduction_pct # Default 1:1 fallback
+            try:
+                stand_loss_yield = await CalculationService.get_lookup_value(
+                    db, stand_table, stand_reduction_pct, growth_stage
+                )
+            except: pass
+            loss_components['stand'] = stand_loss_yield
+            
+            # B. Defoliation Loss
+            defoliation_pct = float(sample.get('percent_defoliation', 0.0))
+            defoliation_loss_yield = 0.0
+            try:
+                defoliation_loss_yield = await CalculationService.get_lookup_value(
+                    db, defoliation_table, defoliation_pct, growth_stage
+                )
+            except: 
+                # Very rough fallback if table missing
+                defoliation_loss_yield = defoliation_pct * 0.1 
+            loss_components['defoliation'] = defoliation_loss_yield
+            
+            # C. Direct Damage (Stalk, Ear, Direct)
+            # Simplified: Sum of provided directs
+            direct_pct = float(sample.get('direct_damage_pct', 0.0))
+            ear_pct = float(sample.get('ear_damage_pct', 0.0))
+            gp_pct = float(sample.get('growing_point_damage_pct', 0.0))
+            
+            direct_loss_total = direct_pct + ear_pct + gp_pct
+            loss_components['direct'] = direct_loss_total
+            
+            # Total Sample Loss (Additive, capped at 100)
+            sample_total_loss = stand_loss_yield + defoliation_loss_yield + direct_loss_total
+            sample_total_loss = min(100.0, sample_total_loss)
+            
+            processed_samples.append({
+                "sample_number": sample.get('sample_number'),
+                "stand_reduction_input": stand_reduction_pct,
+                "stand_loss_yield": stand_loss_yield,
+                "defoliation_loss_yield": defoliation_loss_yield,
+                "direct_loss_yield": direct_loss_total,
+                "total_loss_pct": round(sample_total_loss, 2)
+            })
+            
+            total_loss_pct += sample_total_loss
+            
+        avg_loss = total_loss_pct / len(samples) if samples else 0
+        avg_potential = 100.0 - avg_loss
+        
+        return {
+            "method": "hail_damage",
+            "growth_stage": growth_stage,
+            "loss_percentage": round(avg_loss, 2),
+            "average_potential_yield_pct": round(avg_potential, 2),
+            "sample_details": processed_samples
+        }
     
     @staticmethod
     async def seed_lookup_tables(db: Session):
