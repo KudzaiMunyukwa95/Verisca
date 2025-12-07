@@ -23,6 +23,7 @@ class ReportService {
       final filePath = '${directory.path}/Claim_Report_$timestamp.pdf';
       
       // Download PDF
+      print("Requesting PDF for claim: $claimId");
       final response = await dio.get(
         '/api/v1/claims/$claimId/report',
         options: Options(
@@ -32,14 +33,23 @@ class ReportService {
         ),
       );
       
+      print("PDF Response status: ${response.statusCode}");
+      
       if (response.statusCode == 200) {
         // Write to file
         final file = File(filePath);
         await file.writeAsBytes(response.data);
+        print("PDF saved to: $filePath");
         return filePath;
+      } else if (response.statusCode == 401) {
+        throw Exception("Unauthorized - please log in again");
       } else {
         throw Exception("Failed to download report: ${response.statusCode}");
       }
+    } on DioException catch (e) {
+      print("DioException downloading report: ${e.message}");
+      print("Response: ${e.response?.data}");
+      return null;
     } catch (e) {
       print("Error downloading report: $e");
       return null;
