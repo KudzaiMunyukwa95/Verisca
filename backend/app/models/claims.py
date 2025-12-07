@@ -1,5 +1,5 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, Enum, UniqueConstraint, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, Enum, UniqueConstraint, Index, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from geoalchemy2 import Geometry
@@ -75,11 +75,11 @@ class AssessmentSession(Base):
     growth_stage = Column(String(50)) # V1, V2... VT, R1...
     
     # Conditions
-    weather_conditions = Column(JSONB) # {temp, wind, cloud_cover}
-    crop_conditions = Column(JSONB) # {soil_moisture, weed_pressure, disease_pressure}
+    weather_conditions = Column(JSON) # {temp, wind, cloud_cover}
+    crop_conditions = Column(JSON) # {soil_moisture, weed_pressure, disease_pressure}
     
     # Results High Level
-    calculated_result = Column(JSONB) # {final_yield_est, loss_percentage}
+    calculated_result = Column(JSON) # {final_yield_est, loss_percentage}
     assessor_notes = Column(Text)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -108,10 +108,10 @@ class AssessmentSample(Base):
     
     # Measurements (Variable based on method)
     # Example Stand Reduction: { "row_width": 0.76, "length_measured": 5.0, "plant_count": 28, "gap_count": 2 }
-    measurements = Column(JSONB, nullable=False)
+    measurements = Column(JSON, nullable=False)
     
     # Photos/Evidence at this specific point
-    evidence_refs = Column(JSONB) # ["photo_id_1", "photo_id_2"]
+    evidence_refs = Column(JSON) # ["photo_id_1", "photo_id_2"]
     
     notes = Column(Text)
     
