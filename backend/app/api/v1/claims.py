@@ -414,7 +414,13 @@ async def generate_claim_report(
         session_dicts.append(s_dict)
         
     # 4. Generate PDF
-    return Response(content=pdf_buffer.getvalue(), media_type="application/pdf")
+    pdf_buffer = ReportService.generate_assessment_report(claim_dict, session_dicts)
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Claim_{claim.claim_number}.pdf"}
+    )
 
 @router.post("/{claim_id}/check-in")
 async def check_in_at_field(

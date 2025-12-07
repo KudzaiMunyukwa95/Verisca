@@ -4,6 +4,7 @@ import '../../models/claim.dart';
 import '../../features/assessment/assessment_provider.dart';
 import '../../features/assessment/session_history_provider.dart';
 import '../../features/assessment/assessment_screen.dart';
+import '../../services/report_service.dart';
 
 class ClaimDetailScreen extends StatefulWidget {
   final Claim claim;
@@ -191,6 +192,51 @@ class _ClaimDetailScreenState extends State<ClaimDetailScreen> {
                   ],
                 );
               },
+            ),
+            const SizedBox(height: 16),
+            
+            // Generate Report Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  // Import ReportService
+                  final reportService = ReportService();
+                  
+                  // Show loading
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                  
+                  // Generate and open report
+                  final success = await reportService.generateAndOpenReport(widget.claim.id);
+                  
+                  // Close loading
+                  if (context.mounted) Navigator.pop(context);
+                  
+                  // Show result
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(success 
+                          ? "Report downloaded and opened!" 
+                          : "Failed to generate report"),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text("GENERATE PDF REPORT"),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  foregroundColor: Colors.red,
+                ),
+              ),
             ),
           ],
         ),
