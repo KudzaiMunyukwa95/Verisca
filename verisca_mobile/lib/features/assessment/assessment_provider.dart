@@ -233,7 +233,7 @@ class AssessmentProvider extends ChangeNotifier {
       
       // 3. Finalize Session
       await dio.patch(
-        '/api/v1/claims/sessions/$_currentSessionId',
+        '/api/v1/claims/$_currentClaimId/sessions/$_currentSessionId',
         data: {
           "status": "COMPLETED",
           "calculated_result": result,
