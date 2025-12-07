@@ -6,6 +6,7 @@ import '../../core/location_service.dart';
 
 import '../../models/claim.dart'; // We might need models
 import 'dart:convert';
+import 'package:hive/hive.dart';
 
 class AssessmentProvider extends ChangeNotifier {
   bool _isLoading = false;
@@ -195,25 +196,25 @@ class AssessmentProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // Prepare samples outside try block so it's accessible in catch
+    final List<Map<String, dynamic>> flatSamples = _samples.map((s) {
+      final m = s['measurements'] as Map<String, dynamic>;
+      return {
+        "sample_number": s['sample_number'],
+        "original_stand_count": m['original_stand_count'],
+        "destroyed_plants": m['destroyed_plants'],
+        "percent_defoliation": m['percent_defoliation'],
+        "stalk_damage_severity": m['stalk_damage_severity'], 
+        "growing_point_damage_pct": m['growing_point_damage_pct'],
+        "ear_damage_pct": m['ear_damage_pct'],
+        "direct_damage_pct": m['direct_damage_pct'],
+        "length_measured_m": m['length_measured_m'] ?? 10.0,
+        "row_width_m": m['row_width_m'] ?? 0.76,
+      };
+    }).toList();
+
     try {
       final dio = ApiClient().dio;
-
-      // 1. Prepare Calculation Request (Flatten measurements)
-      final List<Map<String, dynamic>> flatSamples = _samples.map((s) {
-        final m = s['measurements'] as Map<String, dynamic>;
-        return {
-          "sample_number": s['sample_number'],
-          "original_stand_count": m['original_stand_count'],
-          "destroyed_plants": m['destroyed_plants'],
-          "percent_defoliation": m['percent_defoliation'],
-          "stalk_damage_severity": m['stalk_damage_severity'], 
-          "growing_point_damage_pct": m['growing_point_damage_pct'],
-          "ear_damage_pct": m['ear_damage_pct'],
-          "direct_damage_pct": m['direct_damage_pct'],
-          "length_measured_m": m['length_measured_m'] ?? 10.0,
-          "row_width_m": m['row_width_m'] ?? 0.76,
-        };
-      }).toList();
 
       // 2. Call Calculation Engine
       final calcResponse = await dio.post(
@@ -237,16 +238,42 @@ class AssessmentProvider extends ChangeNotifier {
           "date_completed": DateTime.now().toIso8601String()
       };
       
-      // 3. Finalize Session
-      await dio.patch(
-        '/api/v1/claims/$_currentClaimId/sessions/$_currentSessionId',
-        data: payload
-      );
+      // 3. Try to finalize session on server
+      try {
+        await dio.patch(
+          '/api/v1/claims/$_currentClaimId/sessions/$_currentSessionId',
+          data: payload
+        );
+        _successMessage = "Assessment Completed & Synced!";
+      } catch (syncError) {
+        // Server sync failed - store offline for later upload
+        print("Sync failed, storing offline: $syncError");
+        await _storeOfflineSession(payload, flatSamples, growthStage);
+        _successMessage = "Assessment Completed (Offline - will sync later)";
+      }
       
-      _successMessage = "Assessment Completed!";
       return result;
 
     } on DioException catch (e) {
+      // Network error during calculation - try to save offline
+      if (e.type == DioExceptionType.connectionTimeout || 
+          e.type == DioExceptionType.connectionError ||
+          e.response == null) {
+        print("Network error, attempting offline save");
+        try {
+          // Store with pending calculation
+          await _storeOfflineSession({
+            "status": "pending_calculation",
+            "date_completed": DateTime.now().toIso8601String()
+          }, flatSamples, growthStage);
+          _successMessage = "Saved offline - will calculate & sync when online";
+          return {"offline": true};
+        } catch (offlineError) {
+          _errorMessage = "Failed to save offline: $offlineError";
+          return null;
+        }
+      }
+      
       if (e.response != null) {
         _errorMessage = "Server Error: ${e.response?.data}";
       } else {
@@ -259,6 +286,32 @@ class AssessmentProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+  
+  // Store session offline for later sync
+  Future<void> _storeOfflineSession(
+    Map<String, dynamic> sessionData,
+    List<Map<String, dynamic>> samples,
+    String growthStage
+  ) async {
+    try {
+      final hive = await Hive.openBox('pending_sessions');
+      final offlineSession = {
+        "session_id": _currentSessionId,
+        "claim_id": _currentClaimId,
+        "growth_stage": growthStage,
+        "samples": samples,
+        "session_data": sessionData,
+        "created_at": DateTime.now().toIso8601String(),
+        "sync_status": "pending"
+      };
+      
+      await hive.add(offlineSession);
+      print("Stored offline session: $_currentSessionId");
+    } catch (e) {
+      print("Error storing offline session: $e");
+      rethrow;
     }
   }
 }

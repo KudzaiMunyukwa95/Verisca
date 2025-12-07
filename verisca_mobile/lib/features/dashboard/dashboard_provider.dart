@@ -41,6 +41,11 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // First, try to sync up any pending offline sessions
+      final syncResult = await _syncService.syncUp();
+      print("Sync up result: $syncResult");
+      
+      // Then sync down latest data
       await _syncService.syncDown();
       // Reload from local storage to reflect changes
       loadAssignments();

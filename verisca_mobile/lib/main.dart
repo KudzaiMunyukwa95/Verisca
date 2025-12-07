@@ -15,6 +15,7 @@ void main() async {
   await Hive.openBox('claims');
   await Hive.openBox('farms');
   await Hive.openBox('fields');
+  await Hive.openBox('pending_sessions'); // For offline sync
   
   runApp(const VeriscaApp());
 }

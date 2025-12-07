@@ -66,4 +66,64 @@ class SyncService {
   Map<String, dynamic>? getField(String id) {
     return _fieldsBox.get(id);
   }
+  
+  // Sync Up: Upload pending offline sessions
+  Future<Map<String, dynamic>> syncUp() async {
+    try {
+      final pendingBox = await Hive.openBox('pending_sessions');
+      final pendingCount = pendingBox.length;
+      
+      if (pendingCount == 0) {
+        return {"synced": 0, "failed": 0, "message": "No pending sessions"};
+      }
+      
+      print("Found $pendingCount pending sessions to sync");
+      
+      int synced = 0;
+      int failed = 0;
+      
+      // Process in reverse to avoid index issues when deleting
+      for (int i = pendingBox.length - 1; i >= 0; i--) {
+        try {
+          final session = pendingBox.getAt(i) as Map;
+          final sessionId = session['session_id'];
+          final claimId = session['claim_id'];
+          final sessionData = session['session_data'] as Map;
+          
+          // Upload to server
+          await _apiClient.dio.patch(
+            '/api/v1/claims/$claimId/sessions/$sessionId',
+            data: sessionData
+          );
+          
+          // Success - remove from pending
+          await pendingBox.deleteAt(i);
+          synced++;
+          print("Synced session: $sessionId");
+        } catch (e) {
+          print("Failed to sync session at index $i: $e");
+          failed++;
+        }
+      }
+      
+      return {
+        "synced": synced,
+        "failed": failed,
+        "message": "Synced $synced sessions, $failed failed"
+      };
+    } catch (e) {
+      print("Sync up error: $e");
+      return {"synced": 0, "failed": 0, "error": e.toString()};
+    }
+  }
+  
+  // Get count of pending sessions
+  Future<int> getPendingSessionCount() async {
+    try {
+      final pendingBox = await Hive.openBox('pending_sessions');
+      return pendingBox.length;
+    } catch (e) {
+      return 0;
+    }
+  }
 }
