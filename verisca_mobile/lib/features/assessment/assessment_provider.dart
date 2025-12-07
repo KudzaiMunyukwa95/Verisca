@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../core/api_client.dart';
 import '../../core/location_service.dart';
@@ -13,6 +14,7 @@ class AssessmentProvider extends ChangeNotifier {
   
   // Assessment State
   String? _currentSessionId;
+  String? _currentClaimId;
   List<dynamic> _samples = []; // We"ll define a proper model later or use dynamic for now
 
   bool get isLoading => _isLoading;
@@ -76,7 +78,7 @@ class AssessmentProvider extends ChangeNotifier {
 
   // --- Assessment Session Logic ---
 
-  Future<bool> startSession(String claimId, String method) async {
+  Future<bool> startSession(String claimId, String method, String growthStage) async {
     _isLoading = true;
     notifyListeners();
     try {
@@ -84,8 +86,9 @@ class AssessmentProvider extends ChangeNotifier {
       final response = await dio.post(
         '/api/v1/claims/$claimId/sessions',
         data: {
+          "claim_id": claimId,
           "assessment_method": method,
-          "growth_stage": "V5", // Default/Mock for MVP
+          "growth_stage": growthStage,
           "weather_conditions": {"temp": "25C", "condition": "Sunny"},
           "crop_conditions": {"soil": "Moist"},
           "assessor_notes": "Started via Mobile App"
@@ -94,6 +97,7 @@ class AssessmentProvider extends ChangeNotifier {
 
       if (response.statusCode == 201) {
         _currentSessionId = response.data['id'];
+        _currentClaimId = claimId;
         _samples = []; // Reset samples for new session
         return true;
       }
@@ -107,7 +111,7 @@ class AssessmentProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addSample(int sampleNumber, Map<String, dynamic> measurements) async {
+  Future<void> addSample(int sampleNumber, Map<String, dynamic> measurements, [List<String>? evidenceRefs]) async {
     if (_currentSessionId == null) {
       _errorMessage = "No active session";
       notifyListeners();
@@ -129,6 +133,7 @@ class AssessmentProvider extends ChangeNotifier {
           "lng": position.longitude,
           "gps_accuracy_meters": position.accuracy,
           "measurements": measurements,
+          "evidence_refs": evidenceRefs ?? [],
           "notes": "Mobile entry"
         },
       );
@@ -139,6 +144,46 @@ class AssessmentProvider extends ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = "Failed to save sample: $e";
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+  Future<String?> uploadEvidence(File imageFile, String description) async {
+    if (_currentSessionId == null) {
+      _errorMessage = "No active session";
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final position = await _locationService.getCurrentLocation();
+      final dio = ApiClient().dio;
+      String fileName = imageFile.path.split(Platform.pathSeparator).last;
+      
+      FormData formData = FormData.fromMap({
+        "file": await MultipartFile.fromFile(imageFile.path, filename: fileName),
+        "session_id": _currentSessionId,
+        "claim_id": _currentClaimId, 
+        "description": description,
+        "location_lat": position.latitude,
+        "location_lng": position.longitude,
+        "gps_accuracy": position.accuracy,
+      });
+
+      final response = await dio.post('/api/v1/evidence/upload', data: formData);
+      
+      if (response.statusCode == 200) {
+        _successMessage = "Photo uploaded successfully!";
+        return response.data['id']; // Return UUID
+      }
+      return null;
+    } catch (e) {
+      _errorMessage = "Upload failed: $e";
+      return null;
     } finally {
       _isLoading = false;
       notifyListeners();
