@@ -43,10 +43,32 @@ async def sync_down(
     farms = []
     fields = []
     
+    from geoalchemy2.shape import to_shape
+
     if farm_ids:
         farms = db.execute(select(Farm).where(Farm.id.in_(farm_ids))).scalars().all()
+        # Convert Geometry to WKT for serialization
+        for farm in farms:
+            if farm.farm_location is not None and not isinstance(farm.farm_location, str):
+                try:
+                    farm.farm_location = to_shape(farm.farm_location).wkt
+                except Exception as e:
+                    print(f"Error converting farm location: {e}")
+
     if field_ids:
         fields = db.execute(select(Field).where(Field.id.in_(field_ids))).scalars().all()
+        # Convert Geometry to WKT for serialization
+        for field in fields:
+             if field.field_boundary is not None and not isinstance(field.field_boundary, str):
+                try:
+                    field.field_boundary = to_shape(field.field_boundary).wkt
+                except Exception as e:
+                    print(f"Error converting field boundary: {e}")
+             if field.field_center is not None and not isinstance(field.field_center, str):
+                try:
+                    field.field_center = to_shape(field.field_center).wkt
+                except Exception as e:
+                    print(f"Error converting field center: {e}")
         
     return {
         "timestamp": datetime.utcnow(),
