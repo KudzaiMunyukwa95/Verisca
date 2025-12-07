@@ -5,6 +5,7 @@ import 'features/auth/login_screen.dart';
 import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/assessment/assessment_provider.dart';
+import 'features/assessment/session_history_provider.dart';
 
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -28,6 +29,7 @@ class VeriscaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuthStatus()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => AssessmentProvider()),
+        ChangeNotifierProvider(create: (_) => SessionHistoryProvider()),
       ],
       child: MaterialApp(
         title: 'Verisca Mobile',

@@ -215,6 +215,17 @@ async def list_sessions(
         .order_by(desc(AssessmentSession.created_at))
     ).scalars().all()
     
+    # Convert sample geometries to WKT for serialization
+    try:
+        from geoalchemy2.shape import to_shape
+        for session in sessions:
+            for sample in session.samples:
+                if sample.sample_location is not None and not isinstance(sample.sample_location, str):
+                    geom = to_shape(sample.sample_location)
+                    sample.sample_location = geom.wkt
+    except Exception as e:
+        print(f"Warning: Geometry conversion failed in list_sessions: {e}")
+    
     return sessions
 
 @router.patch("/{claim_id}/sessions/{session_id}", response_model=AssessmentSessionResponse)
