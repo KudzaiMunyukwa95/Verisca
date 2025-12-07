@@ -236,8 +236,7 @@ class AssessmentProvider extends ChangeNotifier {
           "calculated_result": result,
           "date_completed": DateTime.now().toIso8601String()
       };
-      print("DEBUG PAYLOAD: $payload");
-
+      
       // 3. Finalize Session
       await dio.patch(
         '/api/v1/claims/$_currentClaimId/sessions/$_currentSessionId',

@@ -16,7 +16,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch data on screen load
+    // Load offline data immediately (Fast)
+    Future.microtask(() =>
+        Provider.of<DashboardProvider>(context, listen: false).loadAssignments());
+    // Trigger background sync
     Future.microtask(() =>
         Provider.of<DashboardProvider>(context, listen: false).fetchAssignments());
   }
@@ -42,71 +45,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: dashboard.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : dashboard.errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(dashboard.errorMessage!, style: const TextStyle(color: Colors.red)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => dashboard.fetchAssignments(),
-                        child: const Text("Retry"),
-                      )
-                    ],
-                  ),
-                )
-              : dashboard.claims.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.assignment_turned_in_outlined, size: 64, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text("No claims assigned to you yet."),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(8.0),
-                      itemCount: dashboard.claims.length,
-                      itemBuilder: (context, index) {
-                        final claim = dashboard.claims[index];
-                        return Card(
-                          elevation: 2,
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: _getPerilColor(claim.perilType),
-                              child: Icon(_getPerilIcon(claim.perilType), color: Colors.white),
-                            ),
-                            title: Text(
-                              claim.claimNumber,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("${claim.perilType.name.toUpperCase()} - ${claim.status.name}"),
-                                if (claim.farmDetails?.farmName != null)
-                                  Text("Farm: ${claim.farmDetails!.farmName}"),
-                              ],
-                            ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ClaimDetailScreen(claim: claim),
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
+      body: RefreshIndicator(
+        onRefresh: () => dashboard.fetchAssignments(),
+        child: _buildBody(dashboard),
+      ),
+    );
+  }
+
+  Widget _buildBody(DashboardProvider dashboard) {
+    if (dashboard.isLoading && dashboard.claims.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (dashboard.errorMessage != null && dashboard.claims.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(dashboard.errorMessage!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => dashboard.fetchAssignments(),
+              child: const Text("Retry"),
+            )
+          ],
+        ),
+      );
+    }
+
+    if (dashboard.claims.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 200),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.assignment_turned_in_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text("No claims assigned to you yet."),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(8.0),
+      itemCount: dashboard.claims.length,
+      itemBuilder: (context, index) {
+        final claim = dashboard.claims[index];
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: _getPerilColor(claim.perilType),
+              child: Icon(_getPerilIcon(claim.perilType), color: Colors.white),
+            ),
+            title: Text(
+              claim.claimNumber,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("${claim.perilType.name.toUpperCase()} - ${claim.status.name}"),
+                if (claim.farmDetails?.farmName != null)
+                  Text("Farm: ${claim.farmDetails!.farmName}"),
+              ],
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ClaimDetailScreen(claim: claim),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 

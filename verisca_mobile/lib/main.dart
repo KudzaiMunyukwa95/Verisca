@@ -6,7 +6,15 @@ import 'features/dashboard/dashboard_provider.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/assessment/assessment_provider.dart';
 
-void main() {
+import 'package:hive_flutter/hive_flutter.dart';
+
+void main() async {
+  await Hive.initFlutter();
+  // Open boxes for offline storage
+  await Hive.openBox('claims');
+  await Hive.openBox('farms');
+  await Hive.openBox('fields');
+  
   runApp(const VeriscaApp());
 }
 
