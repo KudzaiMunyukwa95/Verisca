@@ -23,7 +23,7 @@ export default function DashboardLayout({
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "New Claim", href: "/claims/create", icon: FilePlus },
         { name: "Farms & Fields", href: "/farms", icon: Sprout },
-        // { name: "Assign Assessors", href: "/assessors", icon: Users },
+        { name: "User Management", href: "/admin/users", icon: Users },
     ];
 
     return (
