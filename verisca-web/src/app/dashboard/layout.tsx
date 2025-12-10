@@ -31,11 +31,8 @@ export default function DashboardLayout({
             {/* Sidebar */}
             <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-primary text-white shadow-lg">
                 {/* Logo Area */}
-                <div className="flex h-16 items-center border-b border-primary-light px-6">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-primary font-bold">
-                        Y
-                    </div>
-                    <span className="ml-3 text-lg font-bold tracking-wide">Yieldera</span>
+                <div className="flex h-20 items-center justify-center border-b border-primary-light px-6">
+                    <img src="/logo.png" alt="Yieldera Logo" className="h-12 w-auto object-contain" />
                 </div>
 
                 {/* Navigation */}

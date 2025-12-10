@@ -51,14 +51,10 @@ export default function LoginPage() {
 
         {/* Header / Logo */}
         <div className="flex flex-col items-center text-center">
-          {/* Placeholder for Logo - In real app import Image */}
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
-            {/* Using the Primary Color from global config */}
-            <div className="h-10 w-10 rounded-full bg-primary text-secondary flex items-center justify-center font-bold text-xl">
-              Y
-            </div>
+          <div className="mb-6 h-24 w-24 relative">
+            <img src="/logo.png" alt="Yieldera Logo" className="h-full w-full object-contain" />
           </div>
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+          <h2 className="text-3xl font-bold tracking-tight text-primary">
             Insurer Portal
           </h2>
           <p className="mt-2 text-sm text-gray-600">

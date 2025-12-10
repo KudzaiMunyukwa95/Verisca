@@ -15,7 +15,7 @@
   --color-primary: #01282F;
   --color-primary-light: #023a45;
   --color-primary-dark: #001a1f;
-  
+
   --color-secondary: #B6BF00;
   --color-secondary-light: #C8D100;
   --color-secondary-dark: #9AA000;
@@ -34,5 +34,25 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Enterprise UI Utilities */
+@layer components {
+  .label {
+    @apply block text-sm font-semibold text-gray-700 mb-1.5;
+  }
+
+  .input {
+    @apply block w-full rounded-lg border border-gray-300 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary sm:text-sm py-2.5 px-3 transition-all placeholder:text-gray-400 text-gray-900 bg-white;
+  }
+
+  .btn-primary {
+    @apply flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-primary-light hover:shadow-md active:scale-95 disabled:opacity-70;
+  }
+
+  .btn-secondary {
+    @apply flex items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:text-gray-900 active:scale-95;
+  }
 }
