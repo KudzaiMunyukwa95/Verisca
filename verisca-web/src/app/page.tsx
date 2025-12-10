@@ -19,9 +19,15 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await api.post('/auth/login', {
-        username: email, // FastAPI OAuth2 expects 'username' (which is email for us)
-        password: password,
+      // Fix 422 Error: Convert to URLSearchParams for application/x-www-form-urlencoded
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
+
+      const response = await api.post('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
       const { access_token, user } = response.data;
@@ -51,7 +57,7 @@ export default function LoginPage() {
 
         {/* Header / Logo */}
         <div className="flex flex-col items-center text-center">
-          <div className="mb-6 h-24 w-24 relative">
+          <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-primary p-4 shadow-md">
             <img src="/logo.png" alt="Yieldera Logo" className="h-full w-full object-contain" />
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-primary">
