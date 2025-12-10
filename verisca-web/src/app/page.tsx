@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form'; // Note: Assuming standard React for now, simpler without extra deps if not installed
 // Using standard Controlled inputs for zero-dependency simplicity
 import { User, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
