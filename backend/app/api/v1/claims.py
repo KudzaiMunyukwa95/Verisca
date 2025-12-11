@@ -26,20 +26,81 @@ async def create_claim(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Report a new claim"""
-    # Verify Farm/Field ownership
-    farm = db.execute(
-        select(Farm).where(
-            Farm.id == claim_data.farm_id,
-            Farm.tenant_id == current_user.tenant_id
-        )
-    ).scalar_one_or_none()
+    """Report a new claim (supports Quick Create with names)"""
     
-    if not farm:
-        raise HTTPException(status_code=404, detail="Farm not found")
+    # --- 1. Resolve Farm ---
+    farm_id = claim_data.farm_id
+    if not farm_id and claim_data.farm_name:
+        # Try to find existing farm by name for this tenant
+        existing_farm = db.execute(
+            select(Farm).where(
+                Farm.farm_name == claim_data.farm_name, 
+                Farm.tenant_id == current_user.tenant_id
+            )
+        ).scalar_one_or_none()
+        
+        if existing_farm:
+            farm_id = existing_farm.id
+        else:
+            # Create new "Quick Farm"
+            import uuid
+            new_farm = Farm(
+                tenant_id=current_user.tenant_id,
+                farm_code=f"F-{uuid.uuid4().hex[:6].upper()}",
+                farm_name=claim_data.farm_name,
+                farm_location="POINT(30.0 -18.0)", # Default center (can be updated later)
+                created_by=current_user.id
+            )
+            db.add(new_farm)
+            db.flush() # Get ID
+            farm_id = new_farm.id
+            
+    if not farm_id:
+        raise HTTPException(status_code=400, detail="Farm ID or Farm Name is required")
 
-    # Generate claim number (simple logic for now, could be improved)
-    # Format: CLM-{Year}-{Random/Seq}
+    # --- 2. Resolve Field ---
+    field_id = claim_data.field_id
+    if not field_id and claim_data.field_name:
+        # Find existing field in this farm
+        existing_field = db.execute(
+            select(Field).where(
+                Field.field_name == claim_data.field_name,
+                Field.farm_id == farm_id
+            )
+        ).scalar_one_or_none()
+        
+        if existing_field:
+            field_id = existing_field.id
+        else:
+            # Create new "Quick Field"
+            import uuid
+            # simple mock polygon around the default point
+            mock_poly = "POLYGON((30.0 -18.0, 30.01 -18.0, 30.01 -18.01, 30.0 -18.01, 30.0 -18.0))"
+            
+            new_field = Field(
+                farm_id=farm_id,
+                field_code=f"FLD-{uuid.uuid4().hex[:4].upper()}",
+                field_name=claim_data.field_name,
+                field_boundary=mock_poly,
+                field_area=10.0, # Mock 10ha
+                field_center="POINT(30.005 -18.005)"
+            )
+            db.add(new_field)
+            db.flush()
+            field_id = new_field.id
+            
+    if not field_id:
+         # Fallback: If no field info, create a "General" field for the farm
+         # Or raising error. For now, let's create a Default Field if missing.
+         # But better to require it if frontend sends it.
+         # If frontend sent Nothing, raising error is correct.
+         pass
+         
+    if not field_id and not claim_data.field_name: # Handle case where user provided farm ID but no field
+         raise HTTPException(status_code=400, detail="Field ID or Field Name is required")
+
+
+    # Generate claim number
     year = datetime.now().year
     count = db.query(Claim).filter(Claim.tenant_id == current_user.tenant_id).count()
     claim_number = f"CLM-{year}-{count+1:05d}"
@@ -47,8 +108,8 @@ async def create_claim(
     db_obj = Claim(
         tenant_id=current_user.tenant_id,
         claim_number=claim_number,
-        farm_id=claim_data.farm_id,
-        field_id=claim_data.field_id,
+        farm_id=farm_id,
+        field_id=field_id,
         peril_type=claim_data.peril_type,
         date_of_loss=claim_data.date_of_loss,
         loss_description=claim_data.loss_description,

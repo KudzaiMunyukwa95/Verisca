@@ -24,8 +24,12 @@ class AssessmentStatusEnum(str, Enum):
 # --- Claims ---
 
 class ClaimBase(BaseModel):
-    farm_id: UUID
-    field_id: UUID
+    farm_id: Optional[UUID] = None
+    field_id: Optional[UUID] = None
+    # Flexible input for "Quick Create"
+    farm_name: Optional[str] = None
+    field_name: Optional[str] = None
+    
     peril_type: str
     date_of_loss: datetime
     loss_description: Optional[str] = None
