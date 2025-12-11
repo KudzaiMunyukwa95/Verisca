@@ -49,6 +49,12 @@ class ClaimResponse(ClaimBase):
     tenant_id: UUID
     status: ClaimStatusEnum
     assigned_assessor_id: Optional[UUID]
+    
+    # Flattened UI Fields
+    farm_name: Optional[str] = None
+    field_name: Optional[str] = None
+    assessor_name: Optional[str] = None
+    
     created_at: datetime
     updated_at: Optional[datetime]
     created_by_user_id: Optional[UUID]

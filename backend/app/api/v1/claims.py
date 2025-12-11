@@ -140,7 +140,11 @@ async def list_claims(
     if assigned_to_me:
         query = query.where(Claim.assigned_assessor_id == current_user.id)
         
-    query = query.order_by(desc(Claim.created_at)).offset(skip).limit(limit)
+    query = query.options(
+        selectinload(Claim.farm),
+        selectinload(Claim.field),
+        selectinload(Claim.assessor)
+    ).order_by(desc(Claim.created_at)).offset(skip).limit(limit)
     return db.execute(query).scalars().all()
 
 @router.get("/{claim_id}", response_model=ClaimResponse)
@@ -153,6 +157,10 @@ async def get_claim(
         select(Claim).where(
             Claim.id == claim_id, 
             Claim.tenant_id == current_user.tenant_id
+        ).options(
+            selectinload(Claim.farm),
+            selectinload(Claim.field),
+            selectinload(Claim.assessor)
         )
     ).scalar_one_or_none()
     

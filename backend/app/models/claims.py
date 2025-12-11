@@ -49,10 +49,23 @@ class Claim(Base):
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     
     # Relationships
-    # tenant = relationship("Tenant", back_populates="claims") # Linked via back_populates in tenant
-    # farm = relationship("Farm", back_populates="claims")
-    # field = relationship("Field", back_populates="claims")
+    # tenant = relationship("Tenant", back_populates="claims") 
+    farm = relationship("Farm")
+    field = relationship("Field")
+    assessor = relationship("User", foreign_keys=[assigned_assessor_id])
     assessment_sessions = relationship("AssessmentSession", back_populates="claim", cascade="all, delete-orphan")
+
+    @property
+    def farm_name(self):
+        return self.farm.farm_name if self.farm else None
+        
+    @property
+    def field_name(self):
+        return self.field.field_name if self.field else None
+        
+    @property
+    def assessor_name(self):
+        return self.assessor.full_name if self.assessor else None
 
     __table_args__ = (
         Index('idx_claims_tenant_status', 'tenant_id', 'status'),
