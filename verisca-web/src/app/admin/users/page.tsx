@@ -42,9 +42,46 @@ export default function UserManagementPage() {
         fetchData();
     }, []);
 
+    // SEED ROLES FUNCTION
+    const handleSeedRoles = async () => {
+        if (!confirm("This will attempt to create default system roles (Assessor, Insurer) in the database. Continue?")) return;
+
+        setLoading(true);
+        try {
+            const rolesToCreate = [
+                { role_name: "assessor", role_description: "Field Assessor", permissions: ["read_claims", "create_assessments"], is_system_role: true },
+                { role_name: "insurer", role_description: "Insurance Company User", permissions: ["create_claims", "read_reports"], is_system_role: true }
+            ];
+
+            let createdCount = 0;
+            for (const role of rolesToCreate) {
+                try {
+                    // Check if exists in our local list first to avoid duplicates
+                    const exists = roles.some(r => r.role_name === role.role_name || r.name === role.role_name);
+                    if (!exists) {
+                        // Note: Backend might expect 'name' or 'role_name'. Using 'role_name' from seed script.
+                        await api.post('/roles/', role);
+                        createdCount++;
+                    }
+                } catch (err) {
+                    console.warn(`Failed to create role ${role.role_name}`, err);
+                }
+            }
+
+            alert(`Initialization complete. Created ${createdCount} new roles.`);
+            fetchData(); // Refresh list to update UI
+        } catch (error: any) {
+            console.error("Failed to seed roles", error);
+            alert("Failed to initialize roles. Your user might not have permission, or the API endpoint /roles/ is unavailable.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
     // Derive available roles from EITHER the roles API OR existing users
     const roleOptions = roles.length > 0
-        ? roles.map(r => ({ id: r.id, label: r.name + (r.description ? ` (${r.description})` : '') }))
+        ? roles.map(r => ({ id: r.id, label: (r.name || r.role_name) + (r.description ? ` (${r.description})` : '') }))
         : Array.from(new Set(users.map(u => u.role_id))).map(roleId => {
             const exampleUser = users.find(u => u.role_id === roleId);
             const isLikelyAdmin = exampleUser?.email.includes('admin') || exampleUser?.role_id.startsWith('ab55');
@@ -115,11 +152,26 @@ export default function UserManagementPage() {
                 <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div>
                     <h4 className="font-semibold text-blue-900">Database Connection Status: {fetching ? 'Checking...' : (users.length > 0 ? 'Connected ✅' : 'No Data / Error ❌')}</h4>
-                    <p className="text-sm text-blue-700 mt-1">
+                    <div className="mt-1 text-sm text-blue-700">
                         {roles.length > 0
                             ? `Successfully loaded ${roles.length} system roles.`
-                            : `Warning: Could not load roles from /roles/. Inferred ${roleOptions.length} roles from existing users.`}
-                    </p>
+                            : (
+                                <div>
+                                    <p>Warning: Could not load roles from /roles/. Inferred {roleOptions.length} roles from existing users.</p>
+                                    {/* Seed Button */}
+                                    {!fetching && (
+                                        <button
+                                            onClick={handleSeedRoles}
+                                            disabled={loading}
+                                            className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                        >
+                                            {loading ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : "🛠️ Initialize Missing Roles (Assessor/Insurer)"}
+                                        </button>
+                                    )}
+                                </div>
+                            )
+                        }
+                    </div>
                 </div>
             </div>
 
@@ -165,7 +217,7 @@ export default function UserManagementPage() {
                                         ))}
                                     </select>
                                     {roleOptions.length === 0 && (
-                                        <p className="text-xs text-red-500 mt-1">No roles found. Please switch to "Manual Entry".</p>
+                                        <p className="text-xs text-red-500 mt-1">No roles found. Please use the "Initialize Missing Roles" button above or switch to Manual Entry.</p>
                                     )}
                                 </div>
                             )}
@@ -221,7 +273,7 @@ export default function UserManagementPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600">
-                                            {roleOptions.find(r => r.id === user.role_id)?.label || 'Unknown Role'}
+                                            {roleOptions.find(r => r.id === user.role_id)?.label?.replace('Role Group', 'Role') || 'System Role'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
