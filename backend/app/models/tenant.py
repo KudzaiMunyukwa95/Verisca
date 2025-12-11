@@ -92,6 +92,10 @@ class User(Base):
     created_by = Column(UUID(as_uuid=True))
     updated_by = Column(UUID(as_uuid=True))
     
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
     __table_args__ = (
         Index('idx_users_tenant', 'tenant_id'),
         Index('idx_users_active', 'is_active', 'tenant_id'),

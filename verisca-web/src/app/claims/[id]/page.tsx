@@ -31,6 +31,18 @@ export default function ClaimDetailPage() {
         }
     };
 
+    const handleDelete = async () => {
+        if (!confirm("Are you sure you want to delete this claim? This action cannot be undone.")) return;
+
+        try {
+            await api.delete(`/claims/${params.id}`);
+            router.push("/dashboard");
+        } catch (error) {
+            console.error("Failed to delete claim", error);
+            alert("Failed to delete claim.");
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex h-96 items-center justify-center">
@@ -63,14 +75,22 @@ export default function ClaimDetailPage() {
                         <p className="text-sm text-gray-500">View details and assessment status.</p>
                     </div>
                 </div>
-                <span className={clsx(
-                    "inline-flex items-center rounded-md px-3 py-1 text-sm font-medium ring-1 ring-inset",
-                    claim.status === 'completed' ? "bg-green-50 text-green-700 ring-green-600/20" :
-                        claim.status === 'in_progress' ? "bg-blue-50 text-blue-700 ring-blue-600/20" :
-                            "bg-yellow-50 text-yellow-800 ring-yellow-600/20"
-                )}>
-                    {claim.status}
-                </span>
+                <div className="flex items-center gap-3">
+                    <span className={clsx(
+                        "inline-flex items-center rounded-md px-3 py-1 text-sm font-medium ring-1 ring-inset",
+                        claim.status === 'completed' ? "bg-green-50 text-green-700 ring-green-600/20" :
+                            claim.status === 'in_progress' ? "bg-blue-50 text-blue-700 ring-blue-600/20" :
+                                "bg-yellow-50 text-yellow-800 ring-yellow-600/20"
+                    )}>
+                        {claim.status}
+                    </span>
+                    <button
+                        onClick={handleDelete}
+                        className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-red-300 hover:bg-red-50"
+                    >
+                        Delete
+                    </button>
+                </div>
             </div>
 
             {/* Info Cards */}
