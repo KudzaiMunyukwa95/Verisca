@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, User, Shield, Mail, Loader2, Save, RefreshCw, AlertCircle, Copy, Edit3, Trash2 } from "lucide-react";
+import { Plus, User, Shield, Mail, Loader2, Save, RefreshCw, AlertCircle, Copy, Edit3, Trash2, Settings } from "lucide-react";
 import api from "@/lib/api";
 
 export default function UserManagementPage() {
@@ -18,6 +18,15 @@ export default function UserManagementPage() {
         full_name: "",
         role_id: "" // UUID Required
     });
+
+    // Helper to format text (e.g. "system_admin" -> "System Admin")
+    const formatRoleName = (name: string) => {
+        if (!name) return "Unknown";
+        return name
+            .split(/[ _-]/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    };
 
     // Fetch users AND roles on mount
     const fetchData = async () => {
@@ -44,35 +53,39 @@ export default function UserManagementPage() {
 
     // SEED ROLES FUNCTION
     const handleSeedRoles = async () => {
-        if (!confirm("This will attempt to create default system roles (Assessor, Insurer) in the database. Continue?")) return;
+        if (!confirm("This will overwrite/ensure default system roles (Assessor, Insurer) exist. Continue?")) return;
 
         setLoading(true);
         try {
             const rolesToCreate = [
                 { role_name: "assessor", role_description: "Field Assessor", permissions: ["read_claims", "create_assessments"], is_system_role: true },
-                { role_name: "insurer", role_description: "Insurance Company User", permissions: ["create_claims", "read_reports"], is_system_role: true }
+                { role_name: "insurer", role_description: "Insurance Company User", permissions: ["create_claims", "read_reports"], is_system_role: true },
+                { role_name: "admin", role_description: "System Administrator", permissions: ["all"], is_system_role: true }
             ];
 
             let createdCount = 0;
+            let existsCount = 0;
+
             for (const role of rolesToCreate) {
                 try {
-                    // Check if exists in our local list first to avoid duplicates
-                    const exists = roles.some(r => r.role_name === role.role_name || r.name === role.role_name);
-                    if (!exists) {
-                        // Note: Backend might expect 'name' or 'role_name'. Using 'role_name' from seed script.
-                        await api.post('/roles/', role);
-                        createdCount++;
-                    }
+                    // Check local list first
+                    // The bug before might have been flexible matching. Let's be explicit.
+                    // But actually, we should just TRY to create it. If backend handles idempotency (returns existing), we are good.
+                    // My roles.py implementation: returns existing_role if found.
+
+                    await api.post('/roles/', role);
+                    createdCount++; // We count 'processed'
+
                 } catch (err) {
-                    console.warn(`Failed to create role ${role.role_name}`, err);
+                    console.warn(`Failed to process role ${role.role_name}`, err);
                 }
             }
 
-            alert(`Initialization complete. Created ${createdCount} new roles.`);
+            alert(`Role initialization process completed.`);
             fetchData(); // Refresh list to update UI
         } catch (error: any) {
             console.error("Failed to seed roles", error);
-            alert("Failed to initialize roles. Your user might not have permission, or the API endpoint /roles/ is unavailable.");
+            alert("Failed to initialize roles. " + (error.message || "Unknown error"));
         } finally {
             setLoading(false);
         }
@@ -81,7 +94,10 @@ export default function UserManagementPage() {
 
     // Derive available roles from EITHER the roles API OR existing users
     const roleOptions = roles.length > 0
-        ? roles.map(r => ({ id: r.id, label: (r.name || r.role_name) + (r.description ? ` (${r.description})` : '') }))
+        ? roles.map(r => ({
+            id: r.id,
+            label: formatRoleName(r.name || r.role_name) + (r.description ? ` (${r.description})` : '')
+        }))
         : Array.from(new Set(users.map(u => u.role_id))).map(roleId => {
             const exampleUser = users.find(u => u.role_id === roleId);
             const isLikelyAdmin = exampleUser?.email.includes('admin') || exampleUser?.role_id.startsWith('ab55');
@@ -94,7 +110,7 @@ export default function UserManagementPage() {
             };
         });
 
-    // Check for missing critical roles
+    // Check for missing critical roles for UI warning
     const hasInsurer = roles.some(r => (r.name || r.role_name) === 'insurer');
     const hasAssessor = roles.some(r => (r.name || r.role_name) === 'assessor');
     const missingRoles = !hasInsurer || !hasAssessor;
@@ -168,31 +184,40 @@ export default function UserManagementPage() {
                 </button>
             </div>
 
-            {/* Connection Status */}
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div>
-                    <h4 className="font-semibold text-blue-900">Database Connection Status: {fetching ? 'Checking...' : (users.length > 0 ? 'Connected ✅' : 'No Data / Error ❌')}</h4>
-                    <div className="mt-1 text-sm text-blue-700">
-                        {roles.length > 0
-                            ? `Successfully loaded ${roles.length} system roles.`
-                            : "Warning: Could not load roles from /roles/. Inferred " + roleOptions.length + " roles from existing users."
-                        }
-
-                        {/* Seed Button - Show if roles are empty OR if critical roles are missing */}
-                        {!fetching && (roles.length === 0 || missingRoles) && (
-                            <div className="mt-2">
-                                {missingRoles && roles.length > 0 && <p className="text-xs text-orange-600 mb-1">Missing critical roles (Insurer/Assessor).</p>}
-                                <button
-                                    onClick={handleSeedRoles}
-                                    disabled={loading}
-                                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                    {loading ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : "🛠️ Initialize Missing Roles (Assessor/Insurer)"}
-                                </button>
-                            </div>
-                        )}
+            {/* Connection & Actions Status */}
+            <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                    <Shield className="h-5 w-5 text-blue-600 mt-1" />
+                    <div>
+                        <h4 className="font-semibold text-gray-900">System Roles Config</h4>
+                        <div className="mt-1 text-sm text-gray-600">
+                            {fetching ? 'Syncing...' : (
+                                <span>
+                                    Loaded {roles.length} roles.
+                                    {missingRoles && <span className="text-red-600 font-medium ml-1">Missing key roles (Insurer/Assessor)!</span>}
+                                </span>
+                            )}
+                        </div>
                     </div>
+                </div>
+
+                {/* Always Visible Actions */}
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleSeedRoles}
+                        disabled={loading}
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                        {loading ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : <Settings className="h-4 w-4 mr-2 text-gray-500" />}
+                        Re-Initialize Roles
+                    </button>
+                    <button
+                        onClick={fetchData}
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                        title="Refresh Data"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${fetching ? 'animate-spin' : ''}`} />
+                    </button>
                 </div>
             </div>
 
@@ -237,8 +262,8 @@ export default function UserManagementPage() {
                                             </option>
                                         ))}
                                     </select>
-                                    {roleOptions.length === 0 && (
-                                        <p className="text-xs text-red-500 mt-1">No roles found. Please use the "Initialize Missing Roles" button above or switch to Manual Entry.</p>
+                                    {missingRoles && (
+                                        <p className="text-xs text-red-500 mt-1">Key roles missing. Click "Re-Initialize Roles" above.</p>
                                     )}
                                 </div>
                             )}
@@ -264,9 +289,6 @@ export default function UserManagementPage() {
             <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5 overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                     <h3 className="text-lg font-medium text-gray-900">System Users ({users.length})</h3>
-                    <button onClick={fetchData} className="p-2 hover:bg-gray-100 rounded-full text-gray-500" title="Refresh List">
-                        <RefreshCw className={`h-5 w-5 ${fetching ? 'animate-spin' : ''}`} />
-                    </button>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -295,7 +317,10 @@ export default function UserManagementPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600">
-                                            {roleOptions.find(r => r.id === user.role_id)?.label?.replace('Role Group', 'Role') || 'System Role'}
+                                            {
+                                                roleOptions.find(r => r.id === user.role_id)?.label ||
+                                                formatRoleName(roles.find(r => r.id === user.role_id)?.name || 'Unknown')
+                                            }
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
