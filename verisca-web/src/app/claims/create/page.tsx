@@ -63,11 +63,13 @@ export default function CreateClaimPage() {
 
         try {
             console.log("Submitting Enterprise Claim:", formData);
-            // await api.post('/claims', formData);
-            await new Promise(r => setTimeout(r, 1500)); // Simulate robust processing
+            await api.post('/claims/', formData);
+            alert("Claim created successfully!");
             router.push("/dashboard");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to create claim", error);
+            const msg = error.response?.data?.detail ? JSON.stringify(error.response.data.detail) : error.message;
+            alert(`Failed to create claim: ${msg}`);
         } finally {
             setLoading(false);
         }
