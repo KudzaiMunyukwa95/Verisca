@@ -42,6 +42,9 @@ app.include_router(claims.router, prefix=f"{settings.API_V1_PREFIX}/claims", tag
 app.include_router(calculations.router, prefix=f"{settings.API_V1_PREFIX}/calculations", tags=["calculations"])
 app.include_router(evidence.router, prefix=f"{settings.API_V1_PREFIX}/evidence", tags=["evidence"])
 app.include_router(sync.router, prefix=f"{settings.API_V1_PREFIX}/sync", tags=["sync"])
+# Add Roles Router (New)
+from app.api.v1 import roles
+app.include_router(roles.router, prefix=f"{settings.API_V1_PREFIX}/roles", tags=["roles"])
 
 
 @app.get("/")
