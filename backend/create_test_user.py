@@ -47,6 +47,38 @@ def create_test_data():
         else:
             print("Admin role already exists.")
 
+        # 2b. Create Assessor Role
+        assessor_role = db.query(Role).filter(Role.role_name == "assessor").first()
+        if not assessor_role:
+            print("Creating assessor role...")
+            assessor_role = Role(
+                role_name="assessor",
+                role_description="Field Assessor",
+                permissions=["read_claims", "create_assessments"],
+                is_system_role=True
+            )
+            db.add(assessor_role)
+            db.commit()
+            db.refresh(assessor_role)
+        else:
+            print("Assessor role already exists.")
+
+        # 2c. Create Insurer Role
+        insurer_role = db.query(Role).filter(Role.role_name == "insurer").first()
+        if not insurer_role:
+            print("Creating insurer role...")
+            insurer_role = Role(
+                role_name="insurer",
+                role_description="Insurance Company User",
+                permissions=["create_claims", "read_reports"],
+                is_system_role=True
+            )
+            db.add(insurer_role)
+            db.commit()
+            db.refresh(insurer_role)
+        else:
+            print("Insurer role already exists.")
+
         # 3. Create User
         user = db.query(User).filter(User.username == "admin").first()
         if not user:
