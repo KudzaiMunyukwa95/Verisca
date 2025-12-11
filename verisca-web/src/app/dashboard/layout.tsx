@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, FilePlus, Users, LogOut, Sprout } from "lucide-react";
 import clsx from "clsx";
+import api from "@/lib/api";
 
 export default function DashboardLayout({
     children,
@@ -12,6 +14,36 @@ export default function DashboardLayout({
 }) {
     const pathname = usePathname();
     const router = useRouter();
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const checkRole = async () => {
+            const storedUser = localStorage.getItem("verisca_user");
+            if (!storedUser) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const user = JSON.parse(storedUser);
+                // Fetch roles to map UUID to Name
+                const { data: roles } = await api.get('/roles/');
+                const userRole = roles.find((r: any) => r.id === user.role_id);
+
+                // Check if role is admin-like
+                const roleName = userRole?.name || userRole?.role_name || '';
+                if (['admin', 'system_admin', 'tenant_admin'].includes(roleName.toLowerCase())) {
+                    setIsAdmin(true);
+                }
+            } catch (e) {
+                console.error("Failed to verify role for sidebar", e);
+            } finally {
+                setLoading(false);
+            }
+        }
+        checkRole();
+    }, []);
 
     const handleLogout = () => {
         localStorage.removeItem("verisca_token");
@@ -23,7 +55,8 @@ export default function DashboardLayout({
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "New Claim", href: "/claims/create", icon: FilePlus },
         { name: "Farms & Fields", href: "/farms", icon: Sprout },
-        { name: "User Management", href: "/admin/users", icon: Users },
+        // Only show User Management to Admins
+        ...(isAdmin ? [{ name: "User Management", href: "/admin/users", icon: Users }] : []),
     ];
 
     return (
