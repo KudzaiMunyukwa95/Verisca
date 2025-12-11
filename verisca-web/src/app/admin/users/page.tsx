@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, User, Shield, Mail, Loader2, Save, RefreshCw, AlertCircle, Copy } from "lucide-react";
+import { Plus, User, Shield, Mail, Loader2, Save, RefreshCw, AlertCircle, Copy, Edit3 } from "lucide-react";
 import api from "@/lib/api";
 
 export default function UserManagementPage() {
@@ -9,6 +9,7 @@ export default function UserManagementPage() {
     const [isCreating, setIsCreating] = useState(false);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
+    const [manualEntry, setManualEntry] = useState(false);
 
     const [newUser, setNewUser] = useState({
         email: "",
@@ -17,7 +18,7 @@ export default function UserManagementPage() {
         role_id: "" // UUID Required
     });
 
-    // Fetch users on mount to 1) Confirm Connection and 2) Find Role IDs
+    // Fetch users on mount
     const fetchUsers = async () => {
         setFetching(true);
         try {
@@ -34,15 +35,35 @@ export default function UserManagementPage() {
         fetchUsers();
     }, []);
 
+    // Derive available roles from existing users
+    const availableRoles = Array.from(new Set(users.map(u => u.role_id))).map(roleId => {
+        const exampleUser = users.find(u => u.role_id === roleId);
+        // Heuristic to guess role name based on user data
+        const isLikelyAdmin = exampleUser?.email.includes('admin') || exampleUser?.role_id.startsWith('ab55');
+        const isLikelyAssessor = exampleUser?.email.includes('assessor');
+
+        return {
+            id: roleId,
+            label: isLikelyAdmin ? 'System Admin' :
+                (isLikelyAssessor ? 'Assessor' : `Role Group (e.g. ${exampleUser?.email})`)
+        };
+    });
+
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         try {
             const names = newUser.full_name.split(' ');
-            // Match schema: UserCreate
+
+            if (!newUser.role_id) {
+                alert("Please select a role or enter a Role ID.");
+                setLoading(false);
+                return;
+            }
+
             const payload = {
                 email: newUser.email,
-                username: newUser.email, // Use email as username
+                username: newUser.email,
                 password: newUser.password,
                 first_name: names[0],
                 last_name: names.slice(1).join(' ') || '',
@@ -55,7 +76,7 @@ export default function UserManagementPage() {
             alert("User created successfully!");
             setIsCreating(false);
             setNewUser({ email: "", password: "", full_name: "", role_id: "" });
-            fetchUsers(); // Refresh list to show new user
+            fetchUsers();
         } catch (error: any) {
             console.error("Failed to create user", error);
             const msg = error.response?.data?.detail ? JSON.stringify(error.response.data.detail) : error.message;
@@ -81,14 +102,13 @@ export default function UserManagementPage() {
                 </button>
             </div>
 
-            {/* Connection Status & Role Helper */}
+            {/* Connection Status */}
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div>
                     <h4 className="font-semibold text-blue-900">Database Connection Status: {fetching ? 'Checking...' : (users.length > 0 ? 'Connected ✅' : 'No Data / Error ❌')}</h4>
                     <p className="text-sm text-blue-700 mt-1">
-                        To create a user, we need a valid <strong>Role UUID</strong>.
-                        Below is the list of existing users - please copy a <code>role_id</code> from a similar user (Insurer/Assessor) and paste it into the form.
+                        System detected <strong>{availableRoles.length} unique roles</strong> from the existing user base.
                     </p>
                 </div>
             </div>
@@ -108,14 +128,39 @@ export default function UserManagementPage() {
                             <input type="email" className="input" placeholder="john@verisca.com" required
                                 value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
                         </div>
+
+                        {/* Smart Role Selection */}
                         <div className="md:col-span-2">
-                            <label className="label">Role ID (UUID)</label>
-                            <div className="flex gap-2">
-                                <input className="input font-mono text-sm" placeholder="Paste Role UUID here (e.g. 524e94...)" required
-                                    value={newUser.role_id} onChange={e => setNewUser({ ...newUser, role_id: e.target.value })} />
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">Copy this from the "Role ID" column in the table below.</p>
+                            <label className="label flex justify-between">
+                                <span>Assign Role</span>
+                                <button type="button" onClick={() => setManualEntry(!manualEntry)} className="text-xs text-primary hover:underline">
+                                    {manualEntry ? "Switch to Auto-Select" : "Enter Manual Role ID"}
+                                </button>
+                            </label>
+
+                            {manualEntry ? (
+                                <div>
+                                    <input className="input font-mono text-sm" placeholder="Paste Role UUID here (e.g. 524e94...)" required
+                                        value={newUser.role_id} onChange={e => setNewUser({ ...newUser, role_id: e.target.value })} />
+                                    <p className="text-xs text-gray-500 mt-1">Enter the UUID specific to your system configuration.</p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <select className="input" required value={newUser.role_id} onChange={e => setNewUser({ ...newUser, role_id: e.target.value })}>
+                                        <option value="">-- Select System Role --</option>
+                                        {availableRoles.map(role => (
+                                            <option key={role.id} value={role.id}>
+                                                {role.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {availableRoles.length === 0 && (
+                                        <p className="text-xs text-red-500 mt-1">No existing roles found to copy. Please switch to "Manual Entry" if this is the first user.</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
+
                         <div>
                             <label className="label">Temporary Password</label>
                             <input type="text" className="input" placeholder="Secret123!" required
@@ -146,7 +191,7 @@ export default function UserManagementPage() {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role ID (Copy This)</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             </tr>
                         </thead>
@@ -165,19 +210,9 @@ export default function UserManagementPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <button
-                                            className="group flex items-center gap-2 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-600 font-mono hover:bg-primary/10 hover:text-primary transition-all active:scale-95"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(user.role_id);
-                                                // Optional: Show toast
-                                                setNewUser(prev => ({ ...prev, role_id: user.role_id }));
-                                                if (!isCreating) setIsCreating(true);
-                                            }}
-                                            title="Click to copy Role ID to clipboard"
-                                        >
-                                            {user.role_id.substring(0, 8)}...{user.role_id.substring(user.role_id.length - 4)}
-                                            <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </button>
+                                        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600">
+                                            {availableRoles.find(r => r.id === user.role_id)?.label?.replace('Role Group', 'Role') || 'System Role'}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -186,15 +221,6 @@ export default function UserManagementPage() {
                                     </td>
                                 </tr>
                             ))}
-                            {!fetching && users.length === 0 && (
-                                <tr>
-                                    <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
-                                        <Shield className="mx-auto h-12 w-12 text-gray-300" />
-                                        <h3 className="mt-2 text-sm font-semibold text-gray-900">No users found</h3>
-                                        <p className="mt-1 text-sm text-gray-500">Get started by creating a new user.</p>
-                                    </td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
