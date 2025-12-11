@@ -26,12 +26,11 @@ async def create_claim(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Report a new claim (supports Quick Create with names)"""
+    """Report a new claim (supports Quick Create with names & assignment)"""
     
     # --- 1. Resolve Farm ---
     farm_id = claim_data.farm_id
     if not farm_id and claim_data.farm_name:
-        # Try to find existing farm by name for this tenant
         existing_farm = db.execute(
             select(Farm).where(
                 Farm.farm_name == claim_data.farm_name, 
@@ -42,17 +41,16 @@ async def create_claim(
         if existing_farm:
             farm_id = existing_farm.id
         else:
-            # Create new "Quick Farm"
             import uuid
             new_farm = Farm(
                 tenant_id=current_user.tenant_id,
                 farm_code=f"F-{uuid.uuid4().hex[:6].upper()}",
                 farm_name=claim_data.farm_name,
-                farm_location="POINT(30.0 -18.0)", # Default center (can be updated later)
+                farm_location="POINT(30.0 -18.0)", 
                 created_by=current_user.id
             )
             db.add(new_farm)
-            db.flush() # Get ID
+            db.flush()
             farm_id = new_farm.id
             
     if not farm_id:
@@ -61,7 +59,6 @@ async def create_claim(
     # --- 2. Resolve Field ---
     field_id = claim_data.field_id
     if not field_id and claim_data.field_name:
-        # Find existing field in this farm
         existing_field = db.execute(
             select(Field).where(
                 Field.field_name == claim_data.field_name,
@@ -72,33 +69,34 @@ async def create_claim(
         if existing_field:
             field_id = existing_field.id
         else:
-            # Create new "Quick Field"
             import uuid
-            # simple mock polygon around the default point
             mock_poly = "POLYGON((30.0 -18.0, 30.01 -18.0, 30.01 -18.01, 30.0 -18.01, 30.0 -18.0))"
-            
             new_field = Field(
                 farm_id=farm_id,
                 field_code=f"FLD-{uuid.uuid4().hex[:4].upper()}",
                 field_name=claim_data.field_name,
                 field_boundary=mock_poly,
-                field_area=10.0, # Mock 10ha
+                field_area=10.0,
                 field_center="POINT(30.005 -18.005)"
             )
             db.add(new_field)
             db.flush()
             field_id = new_field.id
             
-    if not field_id:
-         # Fallback: If no field info, create a "General" field for the farm
-         # Or raising error. For now, let's create a Default Field if missing.
-         # But better to require it if frontend sends it.
-         # If frontend sent Nothing, raising error is correct.
-         pass
-         
-    if not field_id and not claim_data.field_name: # Handle case where user provided farm ID but no field
-         raise HTTPException(status_code=400, detail="Field ID or Field Name is required")
+    if not field_id and not claim_data.field_name: 
+         pass # Allow missing field for now if intended
 
+    # --- 3. Resolve Assessor (Assignment) ---
+    assigned_assessor_id = None
+    if claim_data.assessor_email:
+        assessor = db.execute(
+            select(User).where(User.email == claim_data.assessor_email)
+        ).scalar_one_or_none()
+        if assessor:
+            assigned_assessor_id = assessor.id
+        else:
+            # Optional: Warning or Error? Let's log warning but continue
+            print(f"Warning: Assessor with email {claim_data.assessor_email} not found.")
 
     # Generate claim number
     year = datetime.now().year
@@ -114,7 +112,8 @@ async def create_claim(
         date_of_loss=claim_data.date_of_loss,
         loss_description=claim_data.loss_description,
         created_by_user_id=current_user.id,
-        status=ClaimStatus.REPORTED
+        assigned_assessor_id=assigned_assessor_id, # FIX: Assign!
+        status=ClaimStatus.ASSIGNED if assigned_assessor_id else ClaimStatus.REPORTED
     )
     
     db.add(db_obj)
@@ -137,10 +136,7 @@ async def list_claims(
     if status_filter:
         query = query.where(Claim.status == status_filter)
         
-    # Step 3: Assessors only see work assigned to them
-    # If explicit flag passed, or if user role is just 'Assessor' (needs role check logic)
-    # For now, explicit filter:
-    assigned_to_me = Query(False) # Add to params
+    # FIX: Remove erroneous re-declaration of assigned_to_me
     if assigned_to_me:
         query = query.where(Claim.assigned_assessor_id == current_user.id)
         

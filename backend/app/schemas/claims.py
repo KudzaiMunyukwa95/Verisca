@@ -29,6 +29,7 @@ class ClaimBase(BaseModel):
     # Flexible input for "Quick Create"
     farm_name: Optional[str] = None
     field_name: Optional[str] = None
+    assessor_email: Optional[str] = None # Added for assignment
     
     peril_type: str
     date_of_loss: datetime
