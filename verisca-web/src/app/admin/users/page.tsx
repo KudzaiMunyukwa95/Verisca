@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, User, Shield, Mail, Loader2, Save, RefreshCw, AlertCircle, Copy, Edit3 } from "lucide-react";
+import { Plus, User, Shield, Mail, Loader2, Save, RefreshCw, AlertCircle, Copy, Edit3, Trash2 } from "lucide-react";
 import api from "@/lib/api";
 
 export default function UserManagementPage() {
@@ -94,6 +94,27 @@ export default function UserManagementPage() {
             };
         });
 
+    // Check for missing critical roles
+    const hasInsurer = roles.some(r => (r.name || r.role_name) === 'insurer');
+    const hasAssessor = roles.some(r => (r.name || r.role_name) === 'assessor');
+    const missingRoles = !hasInsurer || !hasAssessor;
+
+    const handleDeleteUser = async (userId: string) => {
+        if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+        setLoading(true);
+        try {
+            await api.delete(`/users/${userId}`);
+            alert("User deleted successfully.");
+            fetchData(); // Refresh list
+        } catch (error: any) {
+            console.error("Failed to delete user", error);
+            const msg = error.response?.data?.detail ? JSON.stringify(error.response.data.detail) : error.message;
+            alert(`Failed to delete user: ${msg}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -155,22 +176,22 @@ export default function UserManagementPage() {
                     <div className="mt-1 text-sm text-blue-700">
                         {roles.length > 0
                             ? `Successfully loaded ${roles.length} system roles.`
-                            : (
-                                <div>
-                                    <p>Warning: Could not load roles from /roles/. Inferred {roleOptions.length} roles from existing users.</p>
-                                    {/* Seed Button */}
-                                    {!fetching && (
-                                        <button
-                                            onClick={handleSeedRoles}
-                                            disabled={loading}
-                                            className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                        >
-                                            {loading ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : "🛠️ Initialize Missing Roles (Assessor/Insurer)"}
-                                        </button>
-                                    )}
-                                </div>
-                            )
+                            : "Warning: Could not load roles from /roles/. Inferred " + roleOptions.length + " roles from existing users."
                         }
+
+                        {/* Seed Button - Show if roles are empty OR if critical roles are missing */}
+                        {!fetching && (roles.length === 0 || missingRoles) && (
+                            <div className="mt-2">
+                                {missingRoles && roles.length > 0 && <p className="text-xs text-orange-600 mb-1">Missing critical roles (Insurer/Assessor).</p>}
+                                <button
+                                    onClick={handleSeedRoles}
+                                    disabled={loading}
+                                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                >
+                                    {loading ? <Loader2 className="animate-spin h-3 w-3 mr-2" /> : "🛠️ Initialize Missing Roles (Assessor/Insurer)"}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -255,6 +276,7 @@ export default function UserManagementPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -280,6 +302,15 @@ export default function UserManagementPage() {
                                         <span className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                             {user.is_active ? 'Active' : 'Inactive'}
                                         </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button
+                                            onClick={() => handleDeleteUser(user.id)}
+                                            className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-full transition-colors"
+                                            title="Delete User"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
