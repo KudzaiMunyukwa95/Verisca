@@ -6,6 +6,7 @@ import api from "@/lib/api";
 
 export default function UserManagementPage() {
     const [users, setUsers] = useState<any[]>([]);
+    const [roles, setRoles] = useState<any[]>([]);
     const [isCreating, setIsCreating] = useState(false);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
@@ -18,36 +19,43 @@ export default function UserManagementPage() {
         role_id: "" // UUID Required
     });
 
-    // Fetch users on mount
-    const fetchUsers = async () => {
+    // Fetch users AND roles on mount
+    const fetchData = async () => {
         setFetching(true);
         try {
-            const res = await api.get('/users/?limit=100');
-            setUsers(res.data);
+            // Try to fetch roles, but don't block if it fails
+            const [usersRes, rolesRes] = await Promise.all([
+                api.get('/users/?limit=100'),
+                api.get('/roles/').catch(() => ({ data: [] }))
+            ]);
+
+            setUsers(usersRes.data);
+            setRoles(rolesRes.data);
         } catch (error) {
-            console.error("Failed to fetch users", error);
+            console.error("Failed to fetch data", error);
         } finally {
             setFetching(false);
         }
     };
 
     useEffect(() => {
-        fetchUsers();
+        fetchData();
     }, []);
 
-    // Derive available roles from existing users
-    const availableRoles = Array.from(new Set(users.map(u => u.role_id))).map(roleId => {
-        const exampleUser = users.find(u => u.role_id === roleId);
-        // Heuristic to guess role name based on user data
-        const isLikelyAdmin = exampleUser?.email.includes('admin') || exampleUser?.role_id.startsWith('ab55');
-        const isLikelyAssessor = exampleUser?.email.includes('assessor');
+    // Derive available roles from EITHER the roles API OR existing users
+    const roleOptions = roles.length > 0
+        ? roles.map(r => ({ id: r.id, label: r.name + (r.description ? ` (${r.description})` : '') }))
+        : Array.from(new Set(users.map(u => u.role_id))).map(roleId => {
+            const exampleUser = users.find(u => u.role_id === roleId);
+            const isLikelyAdmin = exampleUser?.email.includes('admin') || exampleUser?.role_id.startsWith('ab55');
+            const isLikelyAssessor = exampleUser?.email.includes('assessor');
 
-        return {
-            id: roleId,
-            label: isLikelyAdmin ? 'System Admin' :
-                (isLikelyAssessor ? 'Assessor' : `Role Group (e.g. ${exampleUser?.email})`)
-        };
-    });
+            return {
+                id: roleId,
+                label: isLikelyAdmin ? 'System Admin' :
+                    (isLikelyAssessor ? 'Assessor' : `Role Group (e.g. ${exampleUser?.email})`)
+            };
+        });
 
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -76,7 +84,7 @@ export default function UserManagementPage() {
             alert("User created successfully!");
             setIsCreating(false);
             setNewUser({ email: "", password: "", full_name: "", role_id: "" });
-            fetchUsers();
+            fetchData();
         } catch (error: any) {
             console.error("Failed to create user", error);
             const msg = error.response?.data?.detail ? JSON.stringify(error.response.data.detail) : error.message;
@@ -108,7 +116,9 @@ export default function UserManagementPage() {
                 <div>
                     <h4 className="font-semibold text-blue-900">Database Connection Status: {fetching ? 'Checking...' : (users.length > 0 ? 'Connected ✅' : 'No Data / Error ❌')}</h4>
                     <p className="text-sm text-blue-700 mt-1">
-                        System detected <strong>{availableRoles.length} unique roles</strong> from the existing user base.
+                        {roles.length > 0
+                            ? `Successfully loaded ${roles.length} system roles.`
+                            : `Warning: Could not load roles from /roles/. Inferred ${roleOptions.length} roles from existing users.`}
                     </p>
                 </div>
             </div>
@@ -134,7 +144,7 @@ export default function UserManagementPage() {
                             <label className="label flex justify-between">
                                 <span>Assign Role</span>
                                 <button type="button" onClick={() => setManualEntry(!manualEntry)} className="text-xs text-primary hover:underline">
-                                    {manualEntry ? "Switch to Auto-Select" : "Enter Manual Role ID"}
+                                    {manualEntry ? "Switch to List Selection" : "Enter Manual Role ID"}
                                 </button>
                             </label>
 
@@ -148,14 +158,14 @@ export default function UserManagementPage() {
                                 <div>
                                     <select className="input" required value={newUser.role_id} onChange={e => setNewUser({ ...newUser, role_id: e.target.value })}>
                                         <option value="">-- Select System Role --</option>
-                                        {availableRoles.map(role => (
+                                        {roleOptions.map(role => (
                                             <option key={role.id} value={role.id}>
                                                 {role.label}
                                             </option>
                                         ))}
                                     </select>
-                                    {availableRoles.length === 0 && (
-                                        <p className="text-xs text-red-500 mt-1">No existing roles found to copy. Please switch to "Manual Entry" if this is the first user.</p>
+                                    {roleOptions.length === 0 && (
+                                        <p className="text-xs text-red-500 mt-1">No roles found. Please switch to "Manual Entry".</p>
                                     )}
                                 </div>
                             )}
@@ -181,7 +191,7 @@ export default function UserManagementPage() {
             <div className="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5 overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                     <h3 className="text-lg font-medium text-gray-900">System Users ({users.length})</h3>
-                    <button onClick={fetchUsers} className="p-2 hover:bg-gray-100 rounded-full text-gray-500" title="Refresh List">
+                    <button onClick={fetchData} className="p-2 hover:bg-gray-100 rounded-full text-gray-500" title="Refresh List">
                         <RefreshCw className={`h-5 w-5 ${fetching ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
@@ -211,7 +221,7 @@ export default function UserManagementPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600">
-                                            {availableRoles.find(r => r.id === user.role_id)?.label?.replace('Role Group', 'Role') || 'System Role'}
+                                            {roleOptions.find(r => r.id === user.role_id)?.label || 'Unknown Role'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
